@@ -1,0 +1,64 @@
+repos:
+
+  # SQL linting and auto-fix
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.1.0
+    hooks:
+      - id: sqlfluff-fix
+        files: delivery/.*\.sql$
+        args: [--dialect, snowflake]
+      - id: sqlfluff-lint
+        files: delivery/.*\.sql$
+        args: [--dialect, snowflake]
+
+  # # Python formatting - .py files
+  # - repo: https://github.com/psf/black
+  #   rev: 24.4.2
+  #   hooks:
+  #     - id: black
+  #       args: [--line-length=88, --target-version=py311]
+
+  # Import sorting - .py files
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=88]
+
+  # Notebook hygiene - strip outputs and execution counts
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+        files: delivery/notebooks/.*\.ipynb$
+
+  # Python formatting, import sorting, and linting - notebook cells
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.8.5
+    hooks:
+      # - id: nbqa-black
+      #   files: delivery/notebooks/.*\.ipynb$
+      #   args: [--line-length=88, --target-version=py311]
+      - id: nbqa-isort
+        files: delivery/notebooks/.*\.ipynb$
+        args: [--profile=black, --line-length=88]
+      - id: nbqa-flake8
+        files: delivery/notebooks/.*\.ipynb$
+        args: [--max-line-length=88, --extend-ignore=E203]
+
+  # Custom checks
+  # - repo: local
+  #   hooks:
+  #     - id: check-naming
+  #       name: Check object naming
+  #       entry: python scripts/check_naming.py
+  #       language: python
+  #       pass_filenames: true
+  #       files: delivery/.*\.sql$
+
+  #     - id: check-temp-objects
+  #       name: Check for debug code
+  #       entry: python scripts/check_temp_objects.py
+  #       language: python
+  #       pass_filenames: true
+  #       files: delivery/.*\.(sql|py|ipynb)$
