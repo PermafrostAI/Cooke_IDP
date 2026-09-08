@@ -1,0 +1,45 @@
+{
+  "doc_type": "health_certificate",
+  "display_name": "Health Certificate",
+  "schema_version": "1.0",
+  "mandatory_fields": [
+    {
+      "field_id": "supplier_number",
+      "label": "Supplier Number",
+      "synonyms": [],
+      "question": "What is the supplier number? This is the key linkage field."
+    },
+    {
+      "field_id": "species_common_name",
+      "label": "Species Common Name",
+      "synonyms": [],
+      "question": "What is the common name of the species?"
+    },
+    {
+      "field_id": "species_scientific_name",
+      "label": "Species Scientific Name",
+      "synonyms": [],
+      "question": "What is the scientific name of the species?"
+    },
+    {
+      "field_id": "production_date",
+      "label": "Production Date",
+      "synonyms": [],
+      "question": "What is the production date?"
+    },
+    {
+      "field_id": "expiry_date",
+      "label": "Expiry Date",
+      "synonyms": [],
+      "question": "What is the expiry date?"
+    }
+  ],
+  "optional_fields": [
+    {
+      "field_id": "farm_identifier",
+      "label": "Farm Identifier",
+      "synonyms": [],
+      "question": "What is the farm identifier, for aquaculture products?"
+    }
+  ]
+}

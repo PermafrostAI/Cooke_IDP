@@ -1,0 +1,44 @@
+{
+  "doc_type": "commercial_invoice",
+  "display_name": "Commercial Invoice",
+  "schema_version": "1.0",
+  "mandatory_fields": [
+    {
+      "field_id": "supplier_name",
+      "label": "Supplier Name",
+      "synonyms": [],
+      "question": "What is the supplier or exporter company name?"
+    },
+    {
+      "field_id": "facility_name",
+      "label": "Facility Name",
+      "synonyms": [],
+      "question": "What is the name of the facility or plant that produced the goods?"
+    },
+    {
+      "field_id": "supplier_address",
+      "label": "Supplier Address",
+      "synonyms": [],
+      "question": "What is the supplier's full address?"
+    },
+    {
+      "field_id": "country_of_origin",
+      "label": "Country of Origin",
+      "synonyms": [],
+      "question": "What is the country of origin of the goods?"
+    },
+    {
+      "field_id": "country_of_processing",
+      "label": "Country of Processing",
+      "synonyms": [],
+      "question": "What is the country of processing of the goods?"
+    },
+    {
+      "field_id": "hts_codes",
+      "label": "HTS Codes",
+      "synonyms": [],
+      "question": "What are the HTS (Harmonized Tariff Schedule) codes for the goods listed?"
+    }
+  ],
+  "optional_fields": []
+}
