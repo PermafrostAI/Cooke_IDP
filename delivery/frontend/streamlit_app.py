@@ -1,6 +1,14 @@
 import streamlit as st
+from utils.snowflake_client import get_session
 
-st.set_page_config(layout="wide", page_title="Slade Gorton Document Hub")
+st.set_page_config(
+    layout="wide", 
+    page_title="Slade Gorton Document Hub",
+    initial_sidebar_state="expanded",
+)
+
+# Warm the session cache on app startup so no page shows
+get_session()
 
 pages = [
     st.Page(
@@ -17,7 +25,7 @@ pages = [
         "pages/3_review_detail.py",
         title="Review detail",
         icon=":material/edit_document:",
-        default=False
+        visibility="hidden",
     ),
     st.Page(
         "pages/4_audit_search.py",
