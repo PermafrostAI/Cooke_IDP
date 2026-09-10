@@ -265,3 +265,74 @@ def get_original_file_bytes(doc_id: str, filename: str) -> bytes | None:
     except Exception:
         return None
 
+
+
+# == TEST / DEBUG ============================================
+
+def get_document_text(doc_id: str) -> dict | None:
+    """
+    Returns extracted text and metadata for a document from DOCUMENTS_TEXT.
+    Parses page content from RAW_EXTRACTED_VALUE VARIANT column.
+    Returns None if no record exists for the given DOC_ID.
+    """
+    try:
+        session = get_session()
+        rows = session.sql(f"""
+            SELECT
+                DOC_ID,
+                PAGE_COUNT,
+                EXTRACTION_MODEL,
+                EXTRACTED_AT,
+                RAW_EXTRACTED_VALUE:metadata:pageCount::INTEGER AS PAGE_COUNT_RAW,
+                RAW_EXTRACTED_VALUE:pages AS PAGES
+            FROM PERMAFROST_POC.PROCESSING.DOCUMENTS_TEXT
+            WHERE DOC_ID = '{doc_id}'
+        """).collect()
+
+        if not rows:
+            return None
+
+        row = rows[0]
+
+        # Parse pages from the VARIANT column
+        import json
+        pages_raw = row["PAGES"]
+        pages = []
+
+        if pages_raw:
+            pages_data = json.loads(pages_raw) if isinstance(pages_raw, str) else pages_raw
+            for page in sorted(pages_data, key=lambda p: p.get("index", 0)):
+                pages.append({
+                    "index": page.get("index", 0),
+                    "content": page.get("content", ""),
+                })
+
+        return {
+            "doc_id":           row["DOC_ID"],
+            "page_count":       row["PAGE_COUNT"],
+            "extraction_model": row["EXTRACTION_MODEL"],
+            "extracted_at":     row["EXTRACTED_AT"],
+            "pages":            pages,
+        }
+
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to retrieve document text. Detail: {e}"
+        )
+
+
+def get_all_doc_ids() -> list[str]:
+    """
+    Returns all DOC_IDs from DOCUMENTS_TEXT for the test viewer dropdown.
+    Fails silently and returns an empty list if the table is not yet populated.
+    """
+    try:
+        session = get_session()
+        rows = session.sql("""
+            SELECT DOC_ID
+            FROM PERMAFROST_POC.PROCESSING.DOCUMENTS_TEXT
+            ORDER BY EXTRACTED_AT DESC
+        """).collect()
+        return [row["DOC_ID"] for row in rows]
+    except Exception:
+        return []
