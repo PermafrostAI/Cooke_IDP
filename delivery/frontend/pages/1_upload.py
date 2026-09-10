@@ -1,14 +1,7 @@
 import streamlit as st
-from utils.snowflake_client import get_staged_filenames, stage_file, call_pipeline
+from utils.snowflake_client import get_staged_filenames, stage_file
 from utils.helpers import format_file_size
-from utils.constants import (
-    ACCEPTED_FILE_TYPES,
-    STATUS_AUTO_APPROVED,
-    STATUS_IN_REVIEW,
-    STATUS_DUPLICATE,
-    STATUS_PIPELINE_UNAVAILABLE,
-    PIPELINE_UNAVAILABLE_MSG,
-)
+from utils.constants import ACCEPTED_FILE_TYPES
 
 st.header("Upload")
 st.caption("Upload supplier documents for processing. Supported formats: PDF, Excel, Word, and images.")
@@ -50,8 +43,7 @@ for f in uploaded_files:
 if duplicate_names:
     st.warning(
         f"The following file(s) already exist in the stage and will be skipped: "
-        f"{','.join(duplicate_names)}. "
-        f"The pipeline will handle content-level deduplication for any files that are processed"
+        f"{', '.join(duplicate_names)}."
     )
 
 if not new_files:
@@ -60,7 +52,7 @@ if not new_files:
 
 # === FILE SUMMARY TABLE =====================================
 
-col_name, col_type, col_size = st.columns([4,2,1])
+col_name, col_type, col_size = st.columns([4, 2, 1])
 col_name.caption("Filename")
 col_type.caption("Type")
 col_size.caption("Size")
@@ -78,44 +70,31 @@ st.divider()
 
 # === SUBMIT =================================================
 
-if st.button("Submit for processing", type="primary", key="upload_submit"):
+if st.button("Submit", type="primary", key="upload_submit"):
 
     results = []
-
     progress = st.progress(0, text="Staging files...")
 
     for i, f in enumerate(new_files):
         file_bytes = f.read()
-        status = None
-        staged_path = None
 
-        # Stage the file
         try:
             staged_path = stage_file(file_bytes, f.name)
+            results.append({
+                "filename": f.name,
+                "status": "STAGED",
+                "staged_path": staged_path,
+            })
         except RuntimeError as e:
             results.append({
                 "filename": f.name,
-                "status": "STAGING_FAILED",
+                "status": "FAILED",
                 "detail": str(e),
             })
-            progress.progress(
-                (i + 1) / len(new_files),
-                text=f"Staged {i + 1} of {len(new_files)} files...",
-            )
-            continue
-
-        # Call the pipeline
-        status = call_pipeline(staged_path)
-
-        results.append({
-            "filename": f.name,
-            "status": status,
-            "staged_path": staged_path,
-        })
 
         progress.progress(
             (i + 1) / len(new_files),
-            text=f"Processed {i + 1} of {len(new_files)} files...",
+            text=f"Staged {i + 1} of {len(new_files)} files...",
         )
 
     progress.empty()
@@ -123,32 +102,18 @@ if st.button("Submit for processing", type="primary", key="upload_submit"):
 
     # == RESULTS ==========================================================
 
-    st.subheader("Processing results")
+    st.subheader("Results")
 
     for result in results:
         filename = result["filename"]
         status = result["status"]
 
-        if status == STATUS_AUTO_APPROVED:
-            st.success(f"{filename} - all fields extracted and auto-approved.")
-
-        elif status == STATUS_IN_REVIEW:
-            st.info(f"{filename} - one or more fields need review. Check the review queue.")
-
-        elif status == STATUS_DUPLICATE:
-            st.warning(f"{filename} - duplicate detected by the pipeline. No reprocessing needed.")
-
-        elif status == STATUS_PIPELINE_UNAVAILABLE:
-            st.warning(f"{filename} - staged successfully but pipeline is unavailable. {PIPELINE_UNAVAILABLE_MSG}")
-
-        elif status == "STAGING_FAILED":
+        if status == "STAGED":
+            st.success(f"{filename} - staged successfully and queued for processing.")
+        else:
             st.error(f"{filename} - could not be staged. {result.get('detail', '')}")
 
-        else:
-            # Handles FAILED: <reason> and any unexpected status
-            st.error(f"{filename} - pipeline returned an unexpected status: {status}")
-
-    # Reset the uploader so it renders empty on the next iteraction
+    # Reset the uploader so it renders empty after submission
     st.session_state["upload_reset_counter"] += 1
 
     
