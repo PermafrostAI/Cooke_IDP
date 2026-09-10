@@ -1,0 +1,33 @@
+.doc-page table {
+    font-size: 0.75rem;
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
+}
+
+.doc-page th,
+.doc-page td {
+    border: 1px solid var(--streamlit-color-border);
+    padding: 4px 8px;
+    text-align: left;
+    color: var(--streamlit-color-text-primary);
+}
+
+.doc-page th {
+    background-color: var(--streamlit-color-background-secondary);
+}
+
+.doc-page p,
+.doc-page li {
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--streamlit-color-text-primary);
+}
+
+.doc-page h1,
+.doc-page h2,
+.doc-page h3 {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--streamlit-color-text-primary);
+}
