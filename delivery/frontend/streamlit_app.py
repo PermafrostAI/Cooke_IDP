@@ -1,4 +1,5 @@
 import streamlit as st
+from pathlib import Path
 from utils.snowflake_client import get_session
 
 st.set_page_config(
@@ -6,6 +7,11 @@ st.set_page_config(
     page_title="Slade Gorton Document Hub",
     initial_sidebar_state="expanded",
 )
+
+# Global styles for rendered document content.
+# Scoped to .doc-page class so they do not affect other Streamlit elements.
+st.html(Path("assets/doc_page.css"))
+
 
 # Warm the session cache on app startup so no page shows
 get_session()
@@ -37,6 +43,10 @@ pages = [
         title="Export",
         icon=":material/download:"
     ),
+    st.Page(
+        "pages/z_test.py",
+        title="Test/Debug",
+    )
 ]
 
 pg = st.navigation(pages)
