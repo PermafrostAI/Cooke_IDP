@@ -43,3 +43,18 @@ def df_to_xlsx(df: pd.DataFrame) -> bytes:
     df.to_excel(buf, index=False, engine="openpyxl")
     buf.seek(0)
     return buf.getvalue()
+
+import markdown as md
+
+
+def render_markdown_small(text: str) -> str:
+    """
+    Converts markdown text to HTML wrapped in a small font container.
+    Used for rendering extracted document text without oversized headings.
+    """
+    html_content = md.markdown(text)
+    return f"""
+        <div style="font-size: 0.8rem; line-height: 1.6;">
+            {html_content}
+        </div>
+    """
