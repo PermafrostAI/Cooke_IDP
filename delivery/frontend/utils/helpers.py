@@ -1,5 +1,6 @@
 import io
 import pandas as pd
+import math
 import markdown as md
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -12,6 +13,8 @@ def confidence_label(score: float) -> str:
     Returns a plain-language label for a confidence score.
     Used in the review queue and review detail screens.
     """
+    if score is None or (isinstance(score, float) and math.isnan(score)):
+        return "No score"
     if score >= 0.85:
         return f"{round(score * 100)}% - high"
     if score >= settings.confidence_threshold:
@@ -97,3 +100,13 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
     wb.save(buffer)
     buffer.seek(0)
     return buffer.read()
+
+
+def is_low_confidence(score: float) -> bool:
+    """
+    Returns True if the score is below the configured confidence threshold.
+    Returns True for None or NaN scores so they are flagged for review.
+    """
+    if score is None or (isinstance(score, float) and math.isnan(score)):
+        return True
+    return score < settings.confidence_threshold
