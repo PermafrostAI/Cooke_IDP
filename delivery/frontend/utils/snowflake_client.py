@@ -22,11 +22,13 @@ def get_session():
 def _safe_query(sql: str) -> pd.DataFrame:
     """
     Wraps a Snowflake SQL query in try/except.
-    Returns a dataframe on success.
+    Fetches session internally so cache_data decorated callers
+    do not need to pass the session as an argument.
     Raises RuntimeError with a plain message on failure.
     Page files catch RuntimeError and call st.error().
     """
     try:
+        session = get_session()
         return session.sql(sql).to_pandas()
     except Exception as e:
         raise RuntimeError(
@@ -38,79 +40,43 @@ def _safe_query(sql: str) -> pd.DataFrame:
 @st.cache_data(ttl=30)
 def get_review_queue() -> pd.DataFrame:
     """
-    Returns all pending documents from REVIEW_QUEUE joined to classification metadata.
-    Columns: DOC_ID, DOC_TYPE, SUPPLIER, FLAG_REASON, CONFIDENCE, CREATED_AT
+    Returns all pending documents from REVIEW_QUEUE.
+    Columns: DOC_ID, DOC_TYPE, FLAG_REASON, CONFIDENCE, CREATED_AT
 
-    PLACEHOLDER: returns a hardcoded dataframe while pipeline tables are not yet available.
-    Replace with _safe_query once REVIEW_QUEUE and documents_classified exist.
+    FLAG_REASONS is a VARIANT array. We take the first element as the
+    display flag reason. Full array is available in NOTES if needed.
+    SUPPLIER is not yet available in this table - deferred to next sprint.
     """
+    return _safe_query("""
+        SELECT
+            QUEUE_ID,
+            CHILD_DOC_ID                          AS DOC_ID,
+            DOC_TYPE,
+            FLAG_REASONS[0]::VARCHAR              AS FLAG_REASON,
+            COMPOSITE_SCORE                       AS CONFIDENCE,
+            NOTES,
+            STATUS,
+            QUEUED_AT                             AS CREATED_AT
+        FROM PERMAFROST_POC.PROCESSING.REVIEW_QUEUE
+        WHERE STATUS = 'PENDING'
+        ORDER BY QUEUED_AT ASC
+    """)
 
-    # --- PLACEHOLDER ---
-    return pd.DataFrame([
-        {
-            "DOC_ID": "abc123def456",
-            "DOC_TYPE": "Catch Certificate",
-            "SUPPLIER": "Nordic Seafood AS",
-            "FLAG_REASON": "Low confidence",
-            "CONFIDENCE": 0.61,
-            "CREATED_AT": datetime.now() - timedelta(hours=3),
-        },
-        {
-            "DOC_ID": "789xyz000aaa",
-            "DOC_TYPE": "Packing List",
-            "SUPPLIER": "Pacific Star Fisheries",
-            "FLAG_REASON": "Missing field",
-            "CONFIDENCE": 0.74,
-            "CREATED_AT": datetime.now() - timedelta(hours=1),
-        },
-    ])
-    # --- END PLACEHOLDER ---
-
-    # --- REAL QUERY (uncomment when tables exist) ---
-    # return _safe_query(session, """
-    #     SELECT
-    #         rq.DOC_ID,
-    #         dc.DOC_TYPE,
-    #         dc.SUPPLIER,
-    #         COALESCE(rq.FLAG_REASON, 'Unknown') AS FLAG_REASON,
-    #         dec.COMPOSITE_CONFIDENCE AS CONFIDENCE,
-    #         rq.CREATED_AT
-    #     FROM PERMAFROST_POC.INGEST.REVIEW_QUEUE rq
-    #     JOIN PERMAFROST_POC.INGEST.documents_classified dc
-    #         ON rq.DOC_ID = dc.DOC_ID
-    #     JOIN PERMAFROST_POC.INGEST.documents_extracted_confidence dec
-    #         ON rq.DOC_ID = dec.DOC_ID
-    #     WHERE rq.STATUS = 'PENDING'
-    #     ORDER BY rq.CREATED_AT ASC
-    # """)
-    # --- END REAL QUERY ---
 
 @st.cache_data(ttl=30)
 def get_queue_summary() -> pd.DataFrame:
     """
     Returns summary counts for the metric cards on the review queue screen.
     Columns: AWAITING, OLDEST_HOURS, AVG_CONFIDENCE
-
-    PLACEHOLDER: derives values from the placeholder dataframe.
-    Replace with a direct SQL query once tables exist.
     """
-
-    # --- PLACEHOLDER ---
-    df = get_review_queue()
-    if df.empty:
-        return pd.DataFrame([{
-            "AWAITING": 0,
-            "OLDEST_HOURS": 0,
-            "AVG_CONFIDENCE": 0.0,
-        }])
-
-    oldest_hours = (datetime.now() - df["CREATED_AT"].min()).seconds // 3600
-    return pd.DataFrame([{
-        "AWAITING": len(df),
-        "OLDEST_HOURS": oldest_hours,
-        "AVG_CONFIDENCE": round(df["CONFIDENCE"].mean() * 100, 1),
-    }])
-    # --- END PLACEHOLDER ---
+    return _safe_query("""
+        SELECT
+            COUNT(*)                                          AS AWAITING,
+            DATEDIFF('hour', MIN(QUEUED_AT), CURRENT_TIMESTAMP()) AS OLDEST_HOURS,
+            ROUND(AVG(COMPOSITE_SCORE) * 100, 1)             AS AVG_CONFIDENCE
+        FROM PERMAFROST_POC.PROCESSING.REVIEW_QUEUE
+        WHERE STATUS = 'PENDING'
+    """)
 
 
 @st.cache_data(ttl=120)
