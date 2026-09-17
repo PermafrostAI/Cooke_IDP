@@ -1,5 +1,9 @@
 import io
 import pandas as pd
+import markdown as md
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils.dataframe import dataframe_to_rows
 from utils.constants import settings
 
 
@@ -44,7 +48,6 @@ def df_to_xlsx(df: pd.DataFrame) -> bytes:
     buf.seek(0)
     return buf.getvalue()
 
-import markdown as md
 
 
 def render_markdown_small(text: str) -> str:
@@ -58,3 +61,39 @@ def render_markdown_small(text: str) -> str:
             {html_content}
         </div>
     """
+
+
+def to_excel_bytes(df: pd.DataFrame) -> bytes:
+    """
+    Converts a dataframe to an in-memory .xlsx file and returns the raw bytes.
+    Column headers are bolded. All columns are auto-sized to fit content.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Extracted Fields"
+
+    header_font = Font(bold=True)
+    header_fill = PatternFill(
+        start_color="E4E4E4", end_color="E4E4E4", fill_type="solid"
+    )
+
+    for row_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), start=1):
+        ws.append(row)
+        if row_idx == 1:
+            for cell in ws[row_idx]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+
+    # Auto-size columns to fit content
+    for col in ws.columns:
+        max_length = max(
+            len(str(cell.value)) if cell.value is not None else 0
+            for cell in col
+        )
+        ws.column_dimensions[col[0].column_letter].width = min(max_length + 4, 60)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.read()

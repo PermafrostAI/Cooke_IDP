@@ -336,3 +336,227 @@ def get_all_doc_ids() -> list[str]:
         return [row["DOC_ID"] for row in rows]
     except Exception:
         return []
+
+
+def get_audit_search_results(
+    query_text: str,
+    doc_type: str,
+    supplier: str,
+    country: str,
+    date_from,
+    date_to,
+) -> pd.DataFrame:
+    """
+    Placeholder data for the audit search screen.
+    Replace with a real Cortex Search query once CLIENT-387 is resolved.
+    """
+    data = {
+        "DOC_ID": [
+            "doc_31aa02",
+            "doc_55bd19",
+            "doc_7c8e44",
+            "doc_9f21a7",
+        ],
+        "FILENAME": [
+            "health_cert_chile_0114.pdf",
+            "health_cert_chile_0207.pdf",
+            "health_cert_chile_0219.pdf",
+            "health_cert_chile_0330.pdf",
+        ],
+        "DOC_TYPE": [
+            "Health Certificate",
+            "Health Certificate",
+            "Health Certificate",
+            "Health Certificate",
+        ],
+        "SUPPLIER": [
+            "Pesca Austral",
+            "Pesca Austral",
+            "Antarctic Seafoods",
+            "Pesca Austral",
+        ],
+        "COUNTRY": ["Chile", "Chile", "Chile", "Chile"],
+        "DOC_DATE": ["2026-01-14", "2026-02-07", "2026-02-19", "2026-03-30"],
+        "LINEAGE": [
+            "AUTO_APPROVED",
+            "REVIEWED",
+            "AUTO_APPROVED",
+            "REVIEWED",
+        ],
+    }
+
+    df = pd.DataFrame(data)
+
+    # Apply placeholder filters
+    if doc_type != "Any":
+        df = df[df["DOC_TYPE"] == doc_type]
+    if supplier != "Any":
+        df = df[df["SUPPLIER"] == supplier]
+    if country != "Any":
+        df = df[df["COUNTRY"] == country]
+
+    return df.copy(deep=True)
+
+
+def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
+    """
+    Placeholder data for the View dialog on the audit search screen.
+    Replace with a real Snowflake query against EXTRACTION_OUTPUT once
+    the schema is confirmed by the pipeline team.
+    """
+    placeholder_fields = {
+        "doc_31aa02": {
+            "FIELD": [
+                "Supplier",
+                "Country of Origin",
+                "Issue Date",
+                "Certificate No.",
+                "Product",
+                "Lot No.",
+                "Net Weight",
+                "Issuing Authority",
+            ],
+            "VALUE": [
+                "Pesca Austral S.A.",
+                "Chile",
+                "2026-01-14",
+                "SERNAPESCA-2026-0041",
+                "Frozen Atlantic Salmon Fillet",
+                "L-3301",
+                "2,400 kg",
+                "SERNAPESCA",
+            ],
+            "CONFIDENCE": [0.97, 0.96, 0.95, 0.88, 0.92, 0.85, 0.91, 0.93],
+            "STATUS": [
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+            ],
+        }
+    }
+
+    fields = placeholder_fields.get(
+        doc_id,
+        {
+            "FIELD": ["Supplier", "Doc Type", "Status"],
+            "VALUE": ["Placeholder Supplier", "Health Certificate", "Auto-approved"],
+            "CONFIDENCE": [0.90, 0.92, 0.95],
+            "STATUS": ["Auto-approved", "Auto-approved", "Auto-approved"],
+        },
+    )
+
+    return pd.DataFrame(fields).copy(deep=True)
+
+    
+
+
+def get_extraction_output(
+    doc_type: str,
+    date_from,
+    date_to,
+    include_status: str,
+    include_confidence: bool,
+) -> pd.DataFrame:
+    """
+    Placeholder data for the export screen.
+    Replace with a real Snowflake query once EXTRACTION_OUTPUT schema is confirmed.
+    """
+    data = {
+        "DOC_ID": ["doc_b7d200", "doc_5f31cc", "doc_2b90fa", "doc_ac31d0"],
+        "DOC_TYPE": ["Packing List", "Packing List", "Packing List", "Packing List"],
+        "SUPPLIER": ["Mariscos del Sur", "Mariscos del Sur", "Baltic Foods", "Ocean Harvest"],
+        "INVOICE_NO": ["MDS-2026-0091", "MDS-2026-0088", "BF-77120", "OH-5521"],
+        "LOT_NO": ["L-4471", "L-4468", "L-9932", "L-1180"],
+        "PRODUCT": [
+            "Frozen Atlantic Salmon Fillet",
+            "Frozen Cod Loin",
+            "Smoked Herring",
+            "Frozen Shrimp",
+        ],
+        "NET_WEIGHT": ["1,240 kg", "980 kg", "410 kg", "720 kg"],
+        "CARTONS": [62, 49, 28, 36],
+        "OVERALL_CONFIDENCE": [0.78, 0.95, 0.93, 0.90],
+        "STATUS": ["APPROVED", "AUTO_APPROVED", "AUTO_APPROVED", "AUTO_APPROVED"],
+        "EXTRACTED_AT": ["2026-07-14", "2026-07-12", "2026-07-10", "2026-07-09"],
+    }
+
+    confidence_cols = {
+        "SUPPLIER_CONFIDENCE": [0.96, 0.97, 0.95, 0.93],
+        "PRODUCT_CONFIDENCE": [0.74, 0.95, 0.92, 0.91],
+        "NET_WEIGHT_CONFIDENCE": [0.61, 0.94, 0.93, 0.90],
+        "LOT_NO_CONFIDENCE": [0.58, 0.96, 0.94, 0.89],
+    }
+
+    df = pd.DataFrame(data)
+
+    if include_confidence:
+        for col, values in confidence_cols.items():
+            df[col] = values
+
+    return df.copy(deep=True)
+
+
+# @st.cache_data(ttl=60)
+# def get_extraction_output(
+#     doc_type: str,
+#     date_from,
+#     date_to,
+#     include_status: str,
+#     include_confidence: bool,
+# ) -> pd.DataFrame:
+#     """
+#     Reads extracted field data from EXTRACTION_OUTPUT for the export screen.
+#     Returns a placeholder dataframe until the pipeline team confirms the schema.
+#     """
+#     session = get_session()
+
+#     # Status filter mapping
+#     status_filter_map = {
+#         "Approved and auto-approved": ("APPROVED", "AUTO_APPROVED"),
+#         "Approved only": ("APPROVED",),
+#         "Everything": None,
+#     }
+#     allowed_statuses = status_filter_map.get(include_status)
+
+#     # Confidence columns to include or exclude
+#     confidence_cols = """
+#         ,eo.SUPPLIER_CONFIDENCE
+#         ,eo.PRODUCT_CONFIDENCE
+#         ,eo.NET_WEIGHT_CONFIDENCE
+#         ,eo.LOT_NO_CONFIDENCE
+#     """
+
+#     try:
+#         # Placeholder query - replace column names once EXTRACTION_OUTPUT
+#         # schema is confirmed by the pipeline team.
+#         query = f"""
+#             SELECT
+#                 eo.DOC_ID
+#                 ,eo.DOC_TYPE
+#                 ,eo.SUPPLIER
+#                 ,eo.INVOICE_NO
+#                 ,eo.LOT_NO
+#                 ,eo.PRODUCT
+#                 ,eo.NET_WEIGHT
+#                 ,eo.CARTONS
+#                 ,eo.OVERALL_CONFIDENCE
+#                 ,eo.STATUS
+#                 ,eo.EXTRACTED_AT
+#                 {',' + confidence_cols.strip() if include_confidence else ''}
+#             FROM {SETTINGS.database}.{SETTINGS.schema_name}.EXTRACTION_OUTPUT eo
+#             WHERE eo.EXTRACTED_AT::DATE BETWEEN '{date_from}' AND '{date_to}'
+#             {f"AND eo.DOC_TYPE = '{doc_type}'" if doc_type != 'All types' else ''}
+#             {f"AND eo.STATUS IN ({', '.join(repr(s) for s in allowed_statuses)})" if allowed_statuses else ''}
+#             ORDER BY eo.EXTRACTED_AT DESC
+#         """
+#         result = session.sql(query).to_pandas()
+#         return result
+
+#     except Exception as e:
+#         st.error(f"Could not load extraction data. Error: {e}")
+#         return pd.DataFrame()
