@@ -44,12 +44,28 @@ ACCEPTED_FILE_TYPES = [
 # Document types used across filter dropdowns
 DOC_TYPES = [
     "All",
-    "Catch Certifate",
-    "Packing List",
-    "Health Certificate",
-    "Bill of Lading",
-    "Commercial Invoice",
-    "Country of Origin Cert",
+    "CATCH CERTIFICATE",
+    "PACKING LIST",
+    "HEALTH CERTIFICATE",
+    "BILL OF LADING",
+    "COMMERCIAL INVOICE",
+    "COUNTRY OF ORIGIN CERT",
+]
+
+# Used in reclassification selectbox - excludes All and UNKNOWN
+# Values are the raw Snowflake DOC_TYPE format
+ASSIGNABLE_DOC_TYPES = [
+    "catch_certificate",
+    "packing_list",
+    "health_certificate",
+    "bill_of_lading",
+    "commercial_invoice",
+    "country_of_origin_cert",
+]
+
+# Display labels matching ASSIGNABLE_DOC_TYPES by index
+ASSIGNABLE_DOC_TYPE_LABELS = [
+    t.replace("_", " ").upper() for t in ASSIGNABLE_DOC_TYPES
 ]
 
 # Flag reasons used in review queue filter
