@@ -7,14 +7,14 @@
 
 .doc-page th,
 .doc-page td {
-    border: 1px solid var(--streamlit-color-border);
+    border: 1px solid #999999;
     padding: 4px 8px;
     text-align: left;
     color: var(--streamlit-color-text-primary);
 }
 
 .doc-page th {
-    background-color: var(--streamlit-color-background-secondary);
+    background-color: #e4e4e4;
 }
 
 .doc-page p,
