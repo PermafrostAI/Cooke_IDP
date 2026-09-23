@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+from snowflake.core import Root
 from utils.constants import (
     settings,
     STATUS_AUTO_APPROVED,
@@ -389,59 +390,59 @@ def get_audit_search_results(
     return df.copy(deep=True)
 
 
-# def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
-#     """
-#     Placeholder data for the View dialog on the audit search screen.
-#     Replace with a real Snowflake query against EXTRACTION_OUTPUT once
-#     the schema is confirmed by the pipeline team.
-#     """
-#     placeholder_fields = {
-#         "doc_31aa02": {
-#             "FIELD": [
-#                 "Supplier",
-#                 "Country of Origin",
-#                 "Issue Date",
-#                 "Certificate No.",
-#                 "Product",
-#                 "Lot No.",
-#                 "Net Weight",
-#                 "Issuing Authority",
-#             ],
-#             "VALUE": [
-#                 "Pesca Austral S.A.",
-#                 "Chile",
-#                 "2026-01-14",
-#                 "SERNAPESCA-2026-0041",
-#                 "Frozen Atlantic Salmon Fillet",
-#                 "L-3301",
-#                 "2,400 kg",
-#                 "SERNAPESCA",
-#             ],
-#             "CONFIDENCE": [0.97, 0.96, 0.95, 0.88, 0.92, 0.85, 0.91, 0.93],
-#             "STATUS": [
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#                 "Auto-approved",
-#             ],
-#         }
-#     }
+def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
+    """
+    Placeholder data for the View dialog on the audit search screen.
+    Replace with a real Snowflake query against EXTRACTION_OUTPUT once
+    the schema is confirmed by the pipeline team.
+    """
+    placeholder_fields = {
+        "doc_31aa02": {
+            "FIELD": [
+                "Supplier",
+                "Country of Origin",
+                "Issue Date",
+                "Certificate No.",
+                "Product",
+                "Lot No.",
+                "Net Weight",
+                "Issuing Authority",
+            ],
+            "VALUE": [
+                "Pesca Austral S.A.",
+                "Chile",
+                "2026-01-14",
+                "SERNAPESCA-2026-0041",
+                "Frozen Atlantic Salmon Fillet",
+                "L-3301",
+                "2,400 kg",
+                "SERNAPESCA",
+            ],
+            "CONFIDENCE": [0.97, 0.96, 0.95, 0.88, 0.92, 0.85, 0.91, 0.93],
+            "STATUS": [
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+                "Auto-approved",
+            ],
+        }
+    }
 
-#     fields = placeholder_fields.get(
-#         doc_id,
-#         {
-#             "FIELD": ["Supplier", "Doc Type", "Status"],
-#             "VALUE": ["Placeholder Supplier", "Health Certificate", "Auto-approved"],
-#             "CONFIDENCE": [0.90, 0.92, 0.95],
-#             "STATUS": ["Auto-approved", "Auto-approved", "Auto-approved"],
-#         },
-#     )
+    fields = placeholder_fields.get(
+        doc_id,
+        {
+            "FIELD": ["Supplier", "Doc Type", "Status"],
+            "VALUE": ["Placeholder Supplier", "Health Certificate", "Auto-approved"],
+            "CONFIDENCE": [0.90, 0.92, 0.95],
+            "STATUS": ["Auto-approved", "Auto-approved", "Auto-approved"],
+        },
+    )
 
-#     return pd.DataFrame(fields).copy(deep=True)
+    return pd.DataFrame(fields).copy(deep=True)
 
     
 
@@ -491,3 +492,22 @@ def get_extraction_output(
 
     return df.copy(deep=True)
 
+
+
+
+@st.cache_resource(show_spinner=False)
+def get_search_service():
+    """
+    Returns a reference to the Cortex Search service.
+    Cached as a shared resource alongside the session.
+    Uses the same session as all other Snowflake calls.
+    """
+    session = get_session()
+    root = Root(session)
+    return (
+        root
+        .databases["PERMAFROST_POC"]
+        .schemas["PROCESSING"]
+        .cortex_search_services["DOCUMENT_AUDIT_SEARCH"]
+    )
+    
