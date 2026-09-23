@@ -40,24 +40,23 @@ def _safe_query(sql: str) -> pd.DataFrame:
 @st.cache_data(ttl=30)
 def get_review_queue() -> pd.DataFrame:
     """
-    Returns all pending documents from REVIEW_QUEUE.
-    Columns: DOC_ID, DOC_TYPE, FLAG_REASON, CONFIDENCE, CREATED_AT
-
-    FLAG_REASONS is a VARIANT array. We take the first element as the
-    display flag reason. Full array is available in NOTES if needed.
-    SUPPLIER is not yet available in this table - deferred to next sprint.
+    Returns all pending documents from VW_REVIEW_QUEUE.
+    Join to DOCUMENTS_CLASSIFIED and DOCUMENTS_INGESTED is handled in the view.
+    FLAG_REASONS array is flattened to a display string in the view.
     """
     return _safe_query("""
         SELECT
             QUEUE_ID,
-            CHILD_DOC_ID                          AS DOC_ID,
+            CHILD_DOC_ID                AS DOC_ID,
             DOC_TYPE,
-            FLAG_REASONS[0]::VARCHAR              AS FLAG_REASON,
-            COMPOSITE_SCORE                       AS CONFIDENCE,
+            DOC_TYPE_LABEL,
+            ORIGINAL_FILENAME,
+            FLAG_REASONS_DISPLAY        AS FLAG_REASON,
+            COMPOSITE_SCORE             AS CONFIDENCE,
             NOTES,
             STATUS,
-            QUEUED_AT                             AS CREATED_AT
-        FROM PERMAFROST_POC.PROCESSING.REVIEW_QUEUE
+            QUEUED_AT                   AS CREATED_AT
+        FROM PERMAFROST_POC.PROCESSING.VW_REVIEW_QUEUE
         WHERE STATUS = 'PENDING'
         ORDER BY QUEUED_AT ASC
     """)
@@ -82,32 +81,58 @@ def get_queue_summary() -> pd.DataFrame:
 @st.cache_data(ttl=120)
 def get_extracted_fields(doc_id: str) -> pd.DataFrame:
     """
-    Returns extracted fields and per-field confidence for a document.
-    Columns: FIELD_NAME, FIELD_VALUE, CONFIDENCE
-    Cached for 120 seconds - field data does not change unless reprocessed.
-
-    PLACEHOLDER: returns hardcoded fields while pipeline tables are not yet available.
-    Replace with _safe_query once documents_extracted_confidence exists.
+    Returns extracted fields and per-field confidence for a document
+    from DOCUMENTS_EXTRACTED_FLAT.
+    FIELD_ID is normalised into a display label on the Python side.
     """
+    df = _safe_query(f"""
+        SELECT
+            FIELD_ID,
+            FIELD_VALUE,
+            FIELD_CONFIDENCE  AS CONFIDENCE,
+            IS_MANDATORY,
+            IS_MISSING
+        FROM PERMAFROST_POC.PROCESSING.DOCUMENTS_EXTRACTED_FLAT
+        WHERE CHILD_DOC_ID = '{doc_id}'
+        ORDER BY IS_MANDATORY DESC, FIELD_ID ASC
+    """)
 
-    # --- PLACEHOLDER ---
-    return pd.DataFrame([
-        {"FIELD_NAME": "Vessel Name",       "FIELD_VALUE": "Nordic Star",  "CONFIDENCE": 0.91},
-        {"FIELD_NAME": "Catch Date",        "FIELD_VALUE": "2026-07-14",   "CONFIDENCE": 0.58},
-        {"FIELD_NAME": "Species",           "FIELD_VALUE": "Atlantic Cod", "CONFIDENCE": 0.88},
-        {"FIELD_NAME": "Country of Origin", "FIELD_VALUE": "Norway",       "CONFIDENCE": 0.95},
-        {"FIELD_NAME": "Certificate No",    "FIELD_VALUE": "",             "CONFIDENCE": 0.20},
-    ])
-    # --- END PLACEHOLDER ---
+    if df.empty:
+        return df
 
-    # --- REAL QUERY (uncomment when tables exist) ---
-    # return _safe_query(f"""
-    #     SELECT FIELD_NAME, FIELD_VALUE, CONFIDENCE
-    #     FROM PERMAFROST_POC.INGEST.documents_extracted_confidence
-    #     WHERE DOC_ID = '{doc_id}'
-    #     ORDER BY FIELD_NAME
-    # """)
-    # --- END REAL QUERY ---
+    # Normalise FIELD_ID into a human-readable label.
+    # e.g. "vessel_name" -> "VESSEL NAME"
+    df["FIELD_LABEL"] = (
+        df["FIELD_ID"]
+        .str.replace("_", " ", regex=False)
+        .str.upper()
+    )
+
+    return df
+
+
+def submit_for_reprocessing(queue_id: str, doc_type: str) -> None:
+    """
+    Updates REVIEW_QUEUE to flag a document for reprocessing
+    with a user-assigned document type.
+    The pipeline picks up rows where STATUS = 'REPROCESS'.
+    Raises RuntimeError on failure.
+    """
+    try:
+        session = get_session()
+        session.sql(f"""
+            UPDATE PERMAFROST_POC.PROCESSING.REVIEW_QUEUE
+            SET
+                STATUS = 'REPROCESS',
+                NOTES = 'User assigned doc type: {doc_type}',
+                REVIEWED_AT = CURRENT_TIMESTAMP()
+            WHERE QUEUE_ID = '{queue_id}'
+        """).collect()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to submit document for reprocessing. Detail: {e}"
+        )
+        
 
 def get_markdown_text(doc_id: str) -> str | None:
     """
@@ -364,59 +389,59 @@ def get_audit_search_results(
     return df.copy(deep=True)
 
 
-def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
-    """
-    Placeholder data for the View dialog on the audit search screen.
-    Replace with a real Snowflake query against EXTRACTION_OUTPUT once
-    the schema is confirmed by the pipeline team.
-    """
-    placeholder_fields = {
-        "doc_31aa02": {
-            "FIELD": [
-                "Supplier",
-                "Country of Origin",
-                "Issue Date",
-                "Certificate No.",
-                "Product",
-                "Lot No.",
-                "Net Weight",
-                "Issuing Authority",
-            ],
-            "VALUE": [
-                "Pesca Austral S.A.",
-                "Chile",
-                "2026-01-14",
-                "SERNAPESCA-2026-0041",
-                "Frozen Atlantic Salmon Fillet",
-                "L-3301",
-                "2,400 kg",
-                "SERNAPESCA",
-            ],
-            "CONFIDENCE": [0.97, 0.96, 0.95, 0.88, 0.92, 0.85, 0.91, 0.93],
-            "STATUS": [
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-                "Auto-approved",
-            ],
-        }
-    }
+# def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
+#     """
+#     Placeholder data for the View dialog on the audit search screen.
+#     Replace with a real Snowflake query against EXTRACTION_OUTPUT once
+#     the schema is confirmed by the pipeline team.
+#     """
+#     placeholder_fields = {
+#         "doc_31aa02": {
+#             "FIELD": [
+#                 "Supplier",
+#                 "Country of Origin",
+#                 "Issue Date",
+#                 "Certificate No.",
+#                 "Product",
+#                 "Lot No.",
+#                 "Net Weight",
+#                 "Issuing Authority",
+#             ],
+#             "VALUE": [
+#                 "Pesca Austral S.A.",
+#                 "Chile",
+#                 "2026-01-14",
+#                 "SERNAPESCA-2026-0041",
+#                 "Frozen Atlantic Salmon Fillet",
+#                 "L-3301",
+#                 "2,400 kg",
+#                 "SERNAPESCA",
+#             ],
+#             "CONFIDENCE": [0.97, 0.96, 0.95, 0.88, 0.92, 0.85, 0.91, 0.93],
+#             "STATUS": [
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#                 "Auto-approved",
+#             ],
+#         }
+#     }
 
-    fields = placeholder_fields.get(
-        doc_id,
-        {
-            "FIELD": ["Supplier", "Doc Type", "Status"],
-            "VALUE": ["Placeholder Supplier", "Health Certificate", "Auto-approved"],
-            "CONFIDENCE": [0.90, 0.92, 0.95],
-            "STATUS": ["Auto-approved", "Auto-approved", "Auto-approved"],
-        },
-    )
+#     fields = placeholder_fields.get(
+#         doc_id,
+#         {
+#             "FIELD": ["Supplier", "Doc Type", "Status"],
+#             "VALUE": ["Placeholder Supplier", "Health Certificate", "Auto-approved"],
+#             "CONFIDENCE": [0.90, 0.92, 0.95],
+#             "STATUS": ["Auto-approved", "Auto-approved", "Auto-approved"],
+#         },
+#     )
 
-    return pd.DataFrame(fields).copy(deep=True)
+#     return pd.DataFrame(fields).copy(deep=True)
 
     
 
@@ -466,63 +491,3 @@ def get_extraction_output(
 
     return df.copy(deep=True)
 
-
-# @st.cache_data(ttl=60)
-# def get_extraction_output(
-#     doc_type: str,
-#     date_from,
-#     date_to,
-#     include_status: str,
-#     include_confidence: bool,
-# ) -> pd.DataFrame:
-#     """
-#     Reads extracted field data from EXTRACTION_OUTPUT for the export screen.
-#     Returns a placeholder dataframe until the pipeline team confirms the schema.
-#     """
-#     session = get_session()
-
-#     # Status filter mapping
-#     status_filter_map = {
-#         "Approved and auto-approved": ("APPROVED", "AUTO_APPROVED"),
-#         "Approved only": ("APPROVED",),
-#         "Everything": None,
-#     }
-#     allowed_statuses = status_filter_map.get(include_status)
-
-#     # Confidence columns to include or exclude
-#     confidence_cols = """
-#         ,eo.SUPPLIER_CONFIDENCE
-#         ,eo.PRODUCT_CONFIDENCE
-#         ,eo.NET_WEIGHT_CONFIDENCE
-#         ,eo.LOT_NO_CONFIDENCE
-#     """
-
-#     try:
-#         # Placeholder query - replace column names once EXTRACTION_OUTPUT
-#         # schema is confirmed by the pipeline team.
-#         query = f"""
-#             SELECT
-#                 eo.DOC_ID
-#                 ,eo.DOC_TYPE
-#                 ,eo.SUPPLIER
-#                 ,eo.INVOICE_NO
-#                 ,eo.LOT_NO
-#                 ,eo.PRODUCT
-#                 ,eo.NET_WEIGHT
-#                 ,eo.CARTONS
-#                 ,eo.OVERALL_CONFIDENCE
-#                 ,eo.STATUS
-#                 ,eo.EXTRACTED_AT
-#                 {',' + confidence_cols.strip() if include_confidence else ''}
-#             FROM {SETTINGS.database}.{SETTINGS.schema_name}.EXTRACTION_OUTPUT eo
-#             WHERE eo.EXTRACTED_AT::DATE BETWEEN '{date_from}' AND '{date_to}'
-#             {f"AND eo.DOC_TYPE = '{doc_type}'" if doc_type != 'All types' else ''}
-#             {f"AND eo.STATUS IN ({', '.join(repr(s) for s in allowed_statuses)})" if allowed_statuses else ''}
-#             ORDER BY eo.EXTRACTED_AT DESC
-#         """
-#         result = session.sql(query).to_pandas()
-#         return result
-
-#     except Exception as e:
-#         st.error(f"Could not load extraction data. Error: {e}")
-#         return pd.DataFrame()
