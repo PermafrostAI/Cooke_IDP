@@ -1,44 +1,80 @@
 {
   "doc_type": "commercial_invoice",
   "display_name": "Commercial Invoice",
-  "schema_version": "1.0",
+  "schema_version": "1.4",
   "mandatory_fields": [
     {
       "field_id": "supplier_name",
       "label": "Supplier Name",
-      "synonyms": [],
-      "question": "What is the supplier or exporter company name?"
-    },
-    {
-      "field_id": "facility_name",
-      "label": "Facility Name",
-      "synonyms": [],
-      "question": "What is the name of the facility or plant that produced the goods?"
+      "synonyms": ["Shipper", "Exporter", "From", "Shipper/Exporter",
+        "Vendedor", "Exportador", "Seller"],
+      "question":  "What is the name of the company that sold the goods to Slade Gorton and issued this invoice?\n\nCRITICAL: Extract the SELLER (the company that invoiced Slade Gorton and will receive payment), never the consignee. The consignee is always Slade Gorton — if you see 'SLADE GORTON' as a candidate, ignore it.\n\nPRIORITY ORDER — use the first match found:\n1. Company named under 'PAYMENT TO:' or 'REMIT TO:'\n2. Field explicitly labeled 'SELLER', 'VENDOR', or 'BENEFICIARY'\n3. Field labeled 'SHIPPER', 'SHIPPER/EXPORTER', 'Exporter', 'From', or 'BENEFICIARY/SHIPPER'\n4. Company name in the document letterhead or header at the very top of the first page — use only if none of the above fields exist\n\nNEVER extract:\n- The consignee (Slade Gorton) or notify party\n- A forwarding agent or customs broker\n- The vessel or carrier name\n\nNote: On invoices from trading companies the SHIPPER field may contain the processor rather than the seller. Always prefer PAYMENT TO or SELLER field over SHIPPER when both exist.\n\nExtract the company name only, not the address. Preserve the company name exactly as written including any business designation prefixes or suffixes (M/S., M/s, PT., CV., Ltd., Pvt. Ltd., LLC, Co., Inc., ehf., hf., etc.). Do not normalize or remove any part of the name. If not found, return null."
     },
     {
       "field_id": "supplier_address",
       "label": "Supplier Address",
-      "synonyms": [],
-      "question": "What is the supplier's full address?"
+      "synonyms": ["Shipper Address", "Exporter Address", "From Address"],
+      "question": "What is the full address of the company identified as the supplier that sold the goods and issued this invoice?\n\nCRITICAL: The supplier address must belong to the SAME company as the supplier name. Do not mix addresses — if the supplier is a Hong Kong trading company, the supplier address is their Hong Kong office address, not a mainland China processor's factory address.\n\nPRIORITY ORDER — use the address from the same source as supplier_name:\n1. If the supplier name came from 'PAYMENT TO:' or 'REMIT TO:' — use the address alongside or below that field\n2. If the supplier name came from a field labeled 'SELLER', 'VENDOR', or 'BENEFICIARY' — use the address alongside that field\n3. If the supplier name came from a field labeled 'SHIPPER', 'EXPORTER', 'FROM:', or 'BENEFICIARY/SHIPPER' — use the address alongside that field\n4. If the supplier name came from the document letterhead or header — use the address appearing directly below the company name in the header\n\nNEVER extract:\n- A processing plant or industrial zone address as the supplier address when the supplier is a trading company at a commercial office\n- The consignee address (Slade Gorton)\n- The notify party address\n\nExtract the address only, not the company name. If not found, return null."
+    },
+    {
+      "field_id": "facility_name",
+      "label": "Facility Name",
+      "synonyms": ["Packer Name", "Packer and Manufacturer", "Processor/Packer",
+        "Shipper and Packer", "Produced by", "Packing Plant",
+        "Processor / Packer", "Manufacturer", "Packer/Manufacturer",
+        "Processing Establishment", "Plant Name"],
+      "question": "What is the name of the facility, plant, or establishment that physically processed or packed the goods?\n\nPRIORITY ORDER — use the first match found:\n1. Field explicitly labeled 'PACKER'S COMPLETE NAME', 'PACKER'S NAME', 'Packer Name', 'Packer and Manufacturer', 'Processor/Packer', 'Shipper and Packer', 'Produced by', or 'Packing Plant' — this is always the correct answer when present\n2. Company associated with a 'PLANT FDA REGISTRATION NO.', 'FDA REGISTRATION NO.', 'USFDA REGISTRATION NUMBER', or 'FEI#' listed anywhere on the document\n3. The 'SHIPPER:' field value — BUT only when the invoice letterhead shows a different company from the SHIPPER field. In that case the letterhead company is the trading company seller and the SHIPPER is the actual processor. Confirm by checking: if the SHIPPER address contains industrial zone indicators ('INDUSTRIAL ZONE', 'INDUSTRIAL PARK', 'INDUSTRIAL AREA', 'VILLAGE', 'FACTORY', 'PROCESSING ZONE') while the letterhead address is a commercial office, the SHIPPER is the facility\n4. If no separate facility field exists and the invoice letterhead company has an FDA registration number listed directly under their name, use the letterhead company name as the facility\n\nNEVER extract:\n- A company at a commercial office address (e.g. 'LEE GARDEN', 'SUN TOWERS', 'TOWER', 'PLAZA', 'SUITE', 'CENTRE', 'KAISAR CENTRE') as the facility — commercial offices are not processing plants\n- The consignee (Slade Gorton) or notify party\n- A forwarding agent or customs broker\n\nIf none of the above signals exist — no packer field, no FDA registration, and the only company address on the document is a commercial office — return null. Do not guess the facility from the letterhead alone.\n\nExtract the company name only, not the address.Preserve the company name exactly as written including any business designation prefixes or suffixes (M/S., M/s, PT., CV., Ltd., Pvt. Ltd., LLC, Co., Inc., ehf., hf., etc.). Do not normalize or remove any part of the name. If not found, return null."
+    },
+    {
+      "field_id": "facility_address",
+      "label": "Facility Address",
+      "synonyms": [
+        "Packer Address", "Packer and Manufacturer Address",
+        "Processor Address", "Plant Address", "Packing Plant Address"
+  ],
+  "question": "What is the full address of the facility, plant, or establishment that physically processed or packed the goods?\n\nWhere to look — in the same priority order as facility_name:\n1. Address appearing alongside or below the field labeled 'PACKER'S COMPLETE NAME', 'PACKER'S NAME', 'Packer Name', 'Packer and Manufacturer', or 'Processor/Packer'\n2. Address associated with the FDA Plant Registration number or USFDA Registration number\n3. Address in the 'SHIPPER:' field — when the SHIPPER is identified as the facility per the facility_name rules above\n4. If facility and supplier are the same company, use the address from the supplier's packer section if one exists at a different location from the head office\n\nA facility address typically contains industrial zone indicators such as 'INDUSTRIAL ZONE', 'INDUSTRIAL PARK', 'INDUSTRIAL AREA', 'INDUSTRIAL ESTATE', 'PROCESSING ZONE', 'VILLAGE', or a specific factory or plant street address. A commercial office building address (e.g. 'LEE GARDEN', 'SUN TOWERS', 'TOWER', 'PLAZA', 'SUITE') is not a facility address — but if the same company operates from one address with no separate plant address, use that address.\n\nExtract the address only, not the company name. If not found, return null."
     },
     {
       "field_id": "country_of_origin",
       "label": "Country of Origin",
-      "synonyms": [],
-      "question": "What is the country of origin of the goods?"
-    },
-    {
-      "field_id": "country_of_processing",
-      "label": "Country of Processing",
-      "synonyms": [],
-      "question": "What is the country of processing of the goods?"
+      "synonyms": ["COUNTRY OF ORIGIN", "Origin", "Country of Origin of Goods",
+        "PRODUCT OF ORIGIN","ORIGIN", "Origin of goods"],
+      "question": "What is the country of origin of the goods? It is labeled 'COUNTRY OF ORIGIN', 'Country of Origin of Goods', 'Origin', 'ORIGIN','Product of origin' or 'País de Origen'. This is where the fish or seafood was caught or farmed. If the label says something like 'COUNTRY OF ORIGIN: PAKISTAN, PRODUCT OF PAKISTAN, PROCESSED IN CHINA', extract only 'PAKISTAN' as the country of origin - the processing country is a separate field. INFERENCE RULE: If no explicit 'Country of Origin' label exists but the document is from a supplier (for example, shipper address is in Vietnam, port of loading is a Vietnamese port, extract 'VIETNAM' as the country of origin. Extract the country name only. If not found, return null."
     },
     {
       "field_id": "hts_codes",
       "label": "HTS Codes",
       "synonyms": [],
-      "question": "What are the HTS (Harmonized Tariff Schedule) codes for the goods listed?"
+      "question": "What are the HTS (Harmonized Tariff Schedule) or HS (Harmonized System) codes for the goods on this invoice?\n\nWhere to look:\n- Field labeled 'HS CODE', 'HTS CODE', 'H.S. CODE', 'H.S.CODE', 'HTSC', 'ITC HS Code', or 'Commodity Code'\n- Within or immediately below the goods description block\n- Footer section near packer information\n- Near the country of origin statement\n- On Icelandic or Norwegian invoices: 'Commodity no.' or 'Icel. Commodity no.' followed by 6 digits (e.g. '030471', '030472') — these are HS codes, extract them as-is\n\nNote: Seafood HTS codes typically begin with '03' (e.g., '030617', '03061720', '030743', '0304') or '1605'.\n\nNEVER extract: invoice numbers, PO numbers, container numbers, registration numbers, or product codes as HTS codes.\n\nIf multiple products have different HTS codes, return each as a separate item in a list.If only one code, return as a single string. If no HTS or HS code is present anywhere on the document, return null."
     }
   ],
-  "optional_fields": []
+  "optional_fields": [
+  {
+      "field_id": "invoice_number",
+      "label": "Invoice Number",
+      "type": "string",
+      "synonyms": [
+        "Invoice No.", "Invoice No", "INV. NO.", "No.", "INVOICE NO.",
+        "Factura No", "Invoice N°", "Commercial Invoice No"
+      ],
+      "question": "What is the invoice number or invoice reference number? It appears near the top of the document labeled 'Invoice No.', 'Invoice No', 'INV. NO.', 'No.', or 'Invoice N°'. It is the supplier's own document reference number for this invoice, not the PO number or container number. If not found, return null."
+    },
+  {
+      "field_id": "country_of_processing",
+      "label": "Country of Processing",
+      "synonyms": [],
+      "question": "What is the country where the goods were processed, if different from the country of origin? This field is only relevant when the origin and processing countries differ. Look for phrases like 'PRODUCT OF [COUNTRY], PROCESSED IN [COUNTRY]' or 'PROCESSED IN CHINA'. If origin and processing country are the same, or if no processing country is separately indicated, return null."
+    },
+ {
+      "field_id": "purchase_order_number",
+      "label": "Purchase Order Number",
+      "type": "string",
+      "synonyms": [
+        "PO No.", "PO NO.", "Purchase Order No.", "Purchase Order No",
+        "P.O.No.", "Buyer's Order No.", "CUSTOMER ORDER NO",
+        "Orden de compra", "Order No."
+      ],
+      "question": "What is the purchase order number? It is labeled 'PO No.', 'PO NO.', 'Purchase Order No.', 'Purchase Order No', 'Buyer's Order No.', 'CUSTOMER ORDER NO', or 'Orden de compra'. It always starts with '4500' for Slade Gorton orders (e.g., '4500315688', '4500316133').Look in all of the following locations - it can appear anywhere on the document: in a dedicated header field labeled 'PO No.', 'PO NO.', 'Purchase Order No.', 'Purchase Order No', 'P.O.No.', 'Buyer's Order No.', 'CUSTOMER ORDER NO', 'Orden de compra', or 'Order No.'; embedded within the goods description or product description block alongside the product name and packing details (e.g., 'P.O. 4500315320' appearing mid-paragraph in the description of goods); in the marks and numbers column of the line item table; or in the footer section near packer and manufacturer details. Extract only the PO number, not the invoice number or contract number.If not found, return null."
+    }
+  ]
 }
