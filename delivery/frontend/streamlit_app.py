@@ -9,8 +9,9 @@ st.set_page_config(
 )
 
 # Global styles for rendered document content.
-# Scoped to .doc-page class so they do not affect other Streamlit elements.
-st.html(Path("assets/doc_page.css"))
+# Must use st.markdown - st.html strips <style> tags via DOMPurify.
+css = Path("assets/doc_page.css").read_text()
+st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 
 # Warm the session cache on app startup so no page shows
