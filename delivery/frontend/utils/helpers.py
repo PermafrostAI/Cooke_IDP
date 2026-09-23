@@ -8,12 +8,14 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from utils.constants import settings
 
 
-def confidence_label(score: float) -> str:
-    """
-    Returns a plain-language label for a confidence score.
-    Used in the review queue and review detail screens.
-    """
-    if score is None or (isinstance(score, float) and math.isnan(score)):
+def confidence_label(score) -> str:
+    if score is None:
+        return "No score"
+    try:
+        score = float(score)
+    except (ValueError, TypeError):
+        return "No score"
+    if math.isnan(score):
         return "No score"
     if score >= 0.85:
         return f"{round(score * 100)}% - high"
@@ -22,10 +24,15 @@ def confidence_label(score: float) -> str:
     return f"{round(score * 100)}% - low"
 
 
-def is_low_confidence(score: float) -> bool:
-    """
-    Returns True if the score is below the configured confidence threshold.
-    """
+def is_low_confidence(score) -> bool:
+    if score is None:
+        return True
+    try:
+        score = float(score)
+    except (ValueError, TypeError):
+        return True
+    if math.isnan(score):
+        return True
     return score < settings.confidence_threshold
 
 
