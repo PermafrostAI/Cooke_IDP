@@ -339,55 +339,144 @@ def get_audit_search_results(
     date_to,
 ) -> pd.DataFrame:
     """
-    Placeholder data for the audit search screen.
-    Replace with a real Cortex Search query once CLIENT-387 is resolved.
+    Queries the Cortex Search service for documents matching the query
+    and structured filters. Date filtering is applied in Python after
+    the search call because DOCUMENT_DATE is stored as TEXT in the service.
     """
-    data = {
-        "DOC_ID": [
-            "doc_31aa02",
-            "doc_55bd19",
-            "doc_7c8e44",
-            "doc_9f21a7",
-        ],
-        "FILENAME": [
-            "health_cert_chile_0114.pdf",
-            "health_cert_chile_0207.pdf",
-            "health_cert_chile_0219.pdf",
-            "health_cert_chile_0330.pdf",
-        ],
-        "DOC_TYPE": [
-            "Health Certificate",
-            "Health Certificate",
-            "Health Certificate",
-            "Health Certificate",
-        ],
-        "SUPPLIER": [
-            "Pesca Austral",
-            "Pesca Austral",
-            "Antarctic Seafoods",
-            "Pesca Austral",
-        ],
-        "COUNTRY": ["Chile", "Chile", "Chile", "Chile"],
-        "DOC_DATE": ["2026-01-14", "2026-02-07", "2026-02-19", "2026-03-30"],
-        "LINEAGE": [
-            "AUTO_APPROVED",
-            "REVIEWED",
-            "AUTO_APPROVED",
-            "REVIEWED",
-        ],
-    }
+    try:
+        service = get_search_service()
 
-    df = pd.DataFrame(data)
+        columns = [
+            "CHILD_DOC_ID",
+            "DOC_TYPE",
+            "DOCUMENT_DESCRIPTION",
+            "ORIGINAL_FILENAME",
+            "SUPPLIER",
+            "COUNTRY",
+            "DOCUMENT_DATE",
+            "GATE_RESULT",
+            "COMPOSITE_SCORE",
+        ]
 
-    # Apply placeholder filters
-    if doc_type != "Any":
-        df = df[df["DOC_TYPE"] == doc_type]
-    if supplier != "Any":
-        df = df[df["SUPPLIER"] == supplier]
-    if country != "Any":
-        df = df[df["COUNTRY"] == country]
+        # Only DOC_TYPE is safe to pass as a service filter (TEXT @eq)
+        conditions = []
 
-    return df.copy(deep=True)
+        if doc_type and doc_type != "Any":
+            conditions.append({"@eq": {"DOC_TYPE": doc_type.lower().replace(" ", "_")}})
+
+        if len(conditions) == 0:
+            filter_obj = None
+        elif len(conditions) == 1:
+            filter_obj = conditions[0]
+        else:
+            filter_obj = {"@and": conditions}
+
+        effective_query = query_text.strip() if query_text and query_text.strip() else "document"
+
+        search_kwargs = dict(
+            query=effective_query,
+            columns=columns,
+            limit=50,
+        )
+
+        if filter_obj:
+            search_kwargs["filter"] = filter_obj
+
+        resp = service.search(**search_kwargs)
+        results = resp.results
+
+        if not results:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(results)
+
+        # Drop any metadata columns returned by the service that contain dicts
+        df = df[[col for col in df.columns if not df[col].apply(lambda x: isinstance(x, dict)).any()]]
+
+        # Apply date filter in Python since DOCUMENT_DATE is TEXT in the service
+        if date_from:
+            df = df[df["DOCUMENT_DATE"] >= str(date_from)]
+        if date_to:
+            df = df[df["DOCUMENT_DATE"] <= str(date_to)]
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # Rename columns to match what 4_audit_search.py expects
+        df = df.rename(columns={
+            "CHILD_DOC_ID":         "DOC_ID",
+            "ORIGINAL_FILENAME":    "FILENAME",
+            "DOCUMENT_DATE":        "DOC_DATE",
+            "GATE_RESULT":          "LINEAGE",
+            "DOCUMENT_DESCRIPTION": "DESCRIPTION",
+        })
+
+        return df.copy(deep=True)
+
+    except Exception as e:
+        raise RuntimeError(
+            f"Audit search failed. Check the Cortex Search service is active. Detail: {e}"
+        )
+
+
+# def get_audit_search_results(
+#     query_text: str,
+#     doc_type: str,
+#     supplier: str,
+#     country: str,
+#     date_from,
+#     date_to,
+# ) -> pd.DataFrame:
+#     """
+#     Placeholder data for the audit search screen.
+#     Replace with a real Cortex Search query once CLIENT-387 is resolved.
+#     """
+#     data = {
+#         "DOC_ID": [
+#             "doc_31aa02",
+#             "doc_55bd19",
+#             "doc_7c8e44",
+#             "doc_9f21a7",
+#         ],
+#         "FILENAME": [
+#             "health_cert_chile_0114.pdf",
+#             "health_cert_chile_0207.pdf",
+#             "health_cert_chile_0219.pdf",
+#             "health_cert_chile_0330.pdf",
+#         ],
+#         "DOC_TYPE": [
+#             "Health Certificate",
+#             "Health Certificate",
+#             "Health Certificate",
+#             "Health Certificate",
+#         ],
+#         "SUPPLIER": [
+#             "Pesca Austral",
+#             "Pesca Austral",
+#             "Antarctic Seafoods",
+#             "Pesca Austral",
+#         ],
+#         "COUNTRY": ["Chile", "Chile", "Chile", "Chile"],
+#         "DOC_DATE": ["2026-01-14", "2026-02-07", "2026-02-19", "2026-03-30"],
+#         "LINEAGE": [
+#             "AUTO_APPROVED",
+#             "REVIEWED",
+#             "AUTO_APPROVED",
+#             "REVIEWED",
+#         ],
+#     }
+
+#     df = pd.DataFrame(data)
+
+#     # Apply placeholder filters
+#     if doc_type != "Any":
+#         df = df[df["DOC_TYPE"] == doc_type]
+#     if supplier != "Any":
+#         df = df[df["SUPPLIER"] == supplier]
+#     if country != "Any":
+#         df = df[df["COUNTRY"] == country]
+
+#     return df.copy(deep=True)
 
 
 def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
