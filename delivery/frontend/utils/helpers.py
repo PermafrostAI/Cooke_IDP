@@ -77,10 +77,17 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
     """
     Converts a dataframe to an in-memory .xlsx file and returns the raw bytes.
     Column headers are bolded. All columns are auto-sized to fit content.
+    Dict-typed columns are dropped before writing to avoid openpyxl errors.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Extracted Fields"
+
+    # Drop any column where any value is a dict (e.g. Cortex Search score metadata)
+    df = df[[
+        col for col in df.columns
+        if not df[col].apply(lambda x: isinstance(x, dict)).any()
+    ]]
 
     header_font = Font(bold=True)
     header_fill = PatternFill(
@@ -95,7 +102,6 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center")
 
-    # Auto-size columns to fit content
     for col in ws.columns:
         max_length = max(
             len(str(cell.value)) if cell.value is not None else 0
