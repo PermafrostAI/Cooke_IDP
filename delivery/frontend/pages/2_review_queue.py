@@ -4,6 +4,7 @@ from utils.snowflake_client import get_review_queue, get_queue_summary
 from utils.constants import DOC_TYPES, FLAG_REASONS
 from utils.helpers import confidence_label
 
+
 st.header("Review queue")
 
 try:
@@ -12,6 +13,17 @@ try:
 except RuntimeError as e:
     st.error(str(e))
     st.stop()
+
+# Normalise the display label on the Python side so it works regardless
+# of whether DOC_TYPE_LABEL is backfilled in the database yet.
+# Falls back to replacing underscores and title-casing DOC_TYPE.
+# Normalise DOC_TYPE_LABEL from DOC_TYPE - replace underscores with spaces, all caps
+df["DOC_TYPE_LABEL"] = (
+    df["DOC_TYPE"]
+    .fillna("UNKNOWN")
+    .str.replace("_", " ", regex=False)
+    .str.upper()
+)
     
 # === METRIC CARDS ===================================
 col1, col2, col3 = st.columns(3)
@@ -44,7 +56,7 @@ filtered_df = df.copy()
 
 if filter_doc_type != "All":
     filtered_df = filtered_df[
-        filtered_df["DOC_TYPE"].str.lower() == filter_doc_type.lower()
+        filtered_df["DOC_TYPE_LABEL"] == filter_doc_type
     ]
 
 if filter_flag_reason:
@@ -64,46 +76,51 @@ if filtered_df.empty:
     st.stop()
 
 
-# === QUEUE TABLE ====================================
-
-col_doc_type, col_flag, col_confidence, col_age, col_action = st.columns(
-    [2, 3, 1, 1, 1]
+# === COLUMN HEADERS =================================
+st.caption(f"{len(filtered_df)} document(s) awaiting review")
+ 
+hcol_file, hcol_type, hcol_flag, hcol_conf, hcol_age, hcol_action = st.columns(
+    [2, 3, 2.5, 1.5, 1, 1]
 )
-col_doc_type.caption("Document type")
-col_flag.caption("Flag reason")
-col_confidence.caption("Confidence")
-col_age.caption("Age")
-col_action.caption("")
+hcol_type.caption("Document type")
+hcol_file.caption("Filename")
+hcol_flag.caption("Flag reason")
+hcol_conf.caption("Confidence")
+hcol_age.caption("Age")
+hcol_action.caption("")
 
 st.divider()
 
-for _, row in filtered_df.iterrows():
-    col_doc_type, col_flag, col_confidence, col_age, col_action = st.columns(
-        [2, 3, 1, 1, 1]
-    )
+# === SCROLLABLE ROW LOOP ============================
+# The opening div applies the .review-queue-scroll class.
+# Each row is rendered as standard st.columns inside.
+# The closing div is written after the loop.
+with st.container(height=520, border=False):
+    for _, row in filtered_df.iterrows():
+        col_file, col_type, col_flag, col_conf, col_age, col_action = st.columns(
+            [2, 3, 2.5, 1.5, 1, 1]
+        )
 
-    if pd.isna(row["CREATED_AT"]):
-        age_str = "Unknown"
-    else:
-        age_hours = (
-            pd.Timestamp.now(tz="UTC") - pd.to_datetime(row["CREATED_AT"], utc=True)
-        ).seconds // 3600
-        age_str = f"{age_hours}h ago"
+        # Age calculation must come before any write call that uses age_str
+        if pd.isna(row["CREATED_AT"]):
+            age_str = "Unknown"
+        else:
+            age_hours = (
+                pd.Timestamp.now(tz="UTC") - pd.to_datetime(row["CREATED_AT"], utc=True)
+            ).seconds // 3600
+            age_str = f"{age_hours}h"
 
-    col_doc_type.write(row["DOC_TYPE"] or "Unknown")
-    col_flag.write(row["FLAG_REASON"] or "Unknown")
-    col_confidence.write(confidence_label(row["CONFIDENCE"]))
-    col_age.write(age_str)
+        col_file.write(row["ORIGINAL_FILENAME"] or "")
+        col_type.write(row["DOC_TYPE_LABEL"])
+        col_flag.write(row["FLAG_REASON"] or "")
+        col_conf.write(confidence_label(row["CONFIDENCE"]))
+        col_age.write(age_str)
 
-    if col_action.button("Open", key=f"queue_open_{row['QUEUE_ID']}"):
-        st.session_state["queue_selected_doc_id"] = row["DOC_ID"]
-        st.session_state["queue_selected_queue_id"] = row["QUEUE_ID"]
-        st.switch_page("pages/3_review_detail.py")
+        if col_action.button("Open", key=f"queue_open_{row['QUEUE_ID']}"):
+            st.session_state["queue_selected_doc_id"] = row["DOC_ID"]
+            st.session_state["queue_selected_queue_id"] = row["QUEUE_ID"]
+            st.session_state["queue_selected_doc_type"] = row["DOC_TYPE"] or ""
+            st.switch_page("pages/3_review_detail.py")
 
-    st.divider()
+        st.divider()
 
-# st.dataframe(
-#     df,
-#     use_container_width=True,
-#     hide_index=True
-# )
