@@ -76,3 +76,20 @@ FLAG_REASONS = [
     "Unknown type",
     "Business rule"
 ]
+
+
+# Export screen - gate and approval status values
+EXPORT_GATE_RESULT_AUTO_APPROVED = "AUTO_APPROVED"
+EXPORT_REVIEW_STATUS_APPROVED = "APPROVED"
+
+# Export screen - filter options shown in the selectbox
+EXPORT_STATUS_OPTIONS = {
+    "Approved + auto-approved": [EXPORT_GATE_RESULT_AUTO_APPROVED, EXPORT_REVIEW_STATUS_APPROVED],
+}
+
+# Export screen - confidence column toggle options
+EXPORT_CONFIDENCE_OPTIONS = ["Include", "Exclude"]
+
+# Export screen - cache TTL in seconds
+EXPORT_CACHE_TTL = 60
+DOC_TYPE_CONFIG_CACHE_TTL = 600  # 10 minutes - config changes rarely
