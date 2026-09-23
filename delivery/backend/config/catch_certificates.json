@@ -1,0 +1,163 @@
+{
+  "doc_type": "catch_certificate",
+  "display_name": "Catch Certificate",
+  "schema_version": "1.4",
+  "mandatory_fields": [
+    {
+      "field_id": "species_name",
+      "label": "Species Name",
+      "synonyms": [
+        "Fish / Shrimps Species", "Description of Product",
+        "Name of Fishery Product", "Species", "Fish Type",
+        "Fisktegund", "Description of exported product",
+        "Fish Species", "Product Description"
+      ],
+      "question": "What is the common name of the fishery species on this catch certificate? CRITICAL: Never return a scientific Latin binomial name (two-part genus + species such as 'Nototodarus sloanii', 'Gadus morhua') as the common name. If only a scientific name is available and no plain-language common name exists, return null. STEP 1: Check for a dedicated common/market name field. If the document has a field explicitly labeled 'Common Name', 'Market Name', 'Commodity Name', or 'Commodity Market Name' — extract from that field. STEP 2: Check for a species table with common names. If the document has a species/product table, extract the common name portion from each row: If a row has both a common name and a scientific name (e.g., 'Pollock Pacific (THERAGRA CHALCOGRAMMA)'), take ONLY the common name; If a row has a FAO 3-alpha code by it self or along with the scientific latin name (e.g., CAS, GHL, POK, USK, Penaeus vannamei (PNV), PNV (Penaeus vannamei)): extract the code and append the known English common name if you recognize the code from FAO ASFIS (e.g., 'CAS (Spotted wolffish)', 'GHL (Greenland halibut)', 'POK (Coalfish)'). If you don't know it, return the code as-is. STEP 3: Fall back to product description fields. Use ONLY if Steps 1-2 found nothing. Look for fields labeled: 'Description of Product', 'Name of Fishery Product(s)', 'Fish / Shrimps Species', 'Fish Type / Fisktegund', or similar. If multiple distinct species, return each unique species as a separate item in a list. If only one species, return as a single string. If not found, return null."
+    },
+    {
+      "field_id": "species_scientific_name",
+      "label": "Species Scientific Name",
+      "synonyms": [
+        "Scientific Name", "Latin name", "Species (Scientific Name)",
+        "Viðar", "Gadus Morhua", "Latin Species Name"
+      ],
+      "question": "What is the scientific or Latin binomial name (genus + species) of the fishery species?\n\nWhere to look by certificate type:\n- USA/NOAA: 'Species (Scientific Name)' column in the species table — the scientific name appears in parentheses below the common name (e.g., 'PLEURONECTES QUADRITUBERCULATUS', 'GADUS MACROCEPHALUS', 'THERAGRA CHALCOGRAMMA')\n- Norwegian: no dedicated scientific name field — return null if not present\n- New Zealand (MPI): 'Species' field (e.g., 'Nototodarus sloanii')\n- German (BLE/EU): 'Species Code (ISO-3 codes)' column — extract the Latin name if present alongside the code\n- Indian (MPEDA): 'Species' field in the product table (e.g., 'EPINEPHELUS DIACANTHUS')\n- Pakistani: 'Fish / Shrimps Species' field in parentheses (e.g., 'UROTEUTHIS DUVAUCELI')\n- Russian: 'Species' column in product table \n- Icelandic: 'Fish Type' column paired with common name (e.g., 'Gadus morhua')\n\nExtract only the two-part Latin binomial (genus + species) exactly as written in the document. Do NOT infer, add, or complete scientific names from FAO codes or common names — only extract what is explicitly present. Return unique species only — if the same scientific name appears multiple times, include it once. If multiple distinct species, return each unique species as a separate item in a list. If only one species, return as a single string. If not found, return null."
+    }
+  ],
+  "optional_fields": [
+   {
+      "field_id": "exporter_name",
+      "label": "Exporter Name",
+      "synonyms": [
+        "Name of Exporter", "Exporter", "Exporter / Company",
+        "Name and address of Exporter", "Exporter Name",
+        "Name of master of fishing vessel"
+      ],
+      "question": "What is the name of the exporting company on this catch certificate — the entity that is selling and shipping the fishery product to the importer?\n\nCRITICAL:\n- NEVER extract the processor, recipient, or buyer as the exporter — these are different entities\n- NEVER assume the processor is the exporter even if no explicit exporter field exists — return null if unsure\n- NEVER extract Slade Gorton or any importer/buyer as the exporter\n- If only a processor is named with no exporter field, return null — the exporter must be confirmed from the commercial invoice or health certificate for the same shipment\n\nWhere to look by certificate type:\n- USA/NOAA: 'Exporter' section — field labeled 'Name:' (e.g. 'NORTH PACIFIC FISHING LLC', 'TRIDENT SEAFOODS CORPORATION')\n- Norwegian: '8. Name and address of exporter' field\n- New Zealand MPI: 'Name and address of consignor' field (e.g. 'Sanford Limited')\n- German BLE: 'Exporter / Company' field\n- Indian MPEDA: '4. Name, address, tel and fax of Exporter' field\n- Pakistani: '8. Name of exporter' field — also appears in Appendix as 'EXPORTER'\n- Russian: '8. Name and address of Exporter' field\n- Icelandic: 'Exporter' section III (e.g. 'Ice Fresh Seafood ehf.')\n- Argentine SENASA: 'Exportador / Exporter' field\n- NMFS Model forms: no exporter field — return null\n- Private company worksheets (no government authority): return null\n\nExtract the company name only, not the address. If not found, return null."
+    },
+    {
+      "field_id": "certificate_number",
+      "label": "Certificate Number",
+      "synonyms": [
+        "Document Number", "Document No", "Document number",
+        "1. Document No", "Cert No", "Certificate No.", "Doc No."
+      ],
+      "question": "What is the official certificate or document reference number issued by the validating authority?\n\nWhere to look by certificate type:\n- USA/NOAA: 'Document Number' in the top right header (e.g., 'CN.3040.34441.23-CC', 'CN.3001.62343.25-CC')\n- Norwegian: '1. Document No' field (e.g., 'NO-751-200211-154515')\n- New Zealand (MPI): 'Certificate Number' in the top right (e.g., 'NZL2022/FEL90/546048')\n- German (BLE/EU): '9. Document number' field (e.g., 'DE 2020/337')\n- Indian (MPEDA): 'Document number' field (e.g., 'IN/MPEDA/GU1/2025/13837')\n- Pakistani: 'Document number' field (e.g., 'T-569/I-19/385383/8197')\n- Russian: '1. Document number / Номер документа' field (e.g., 'RU-MUR-2019-03542')\n- Icelandic: certificate reference handwritten on document\n\nExtract the alphanumeric code only, not the label text. If not found, return null."
+    },
+    {
+      "field_id": "catch_date",
+      "label": "Catch Date or Range",
+      "synonyms": [
+        "Catch Date or Range", "Date of Catch", "Catch dates",
+        "Landing date", "Date of Lading", "Catch area(s) and dates"
+      ],
+      "question": "What are the catch dates or catch date ranges for each species or vessel on this certificate?\n\nWhere to look by certificate type:\n- USA/NOAA: 'Catch Date or Range' column in the species table — one date range per species line (e.g., '5/12/2023 - 5/21/2023', '05/09/2025 - 08/21/2025')\n- Norwegian: 'Landing date' column in the fishing vessel and catch details table — one date per vessel row\n- New Zealand (MPI): 'Catch dates' field in the lower section — multiple date ranges for different vessel groups (e.g., '25-Mar-2022 - 10-May-2022')\n- German (BLE/EU): 'Catch area(s) and dates' sub-column in the product table\n- Indian (MPEDA): annexure table 'Date of unloading of catch' column — one date per vessel row\n- Pakistani: appendix table 'Date of Lading' column per vessel row\n- Russian: 'Catch area(s) and dates column in the species table\n- Icelandic: 'Landing Date' column per vessel row\n\nExtract all catch dates found across all pages. For date ranges extract both start and end dates. If multiple vessel rows have different dates, return all unique value as a list. If only one date, return as a single string. If not found, return null."
+    },
+    {
+      "field_id": "vessel_names",
+      "label": "Vessel Names",
+      "synonyms": [
+        "Vessel Name", "Fishing Vessel Name", "Vessel Name/Fishing Group",
+        "Name of Vessel", "Vessel name and flag", "Vessel Code",
+        "Skipsnr.", "Vessel Name/Registration"
+      ],
+      "question": "What are the names of all fishing vessels that caught the product on this certificate?\n\nExtract ONLY fishing vessels from the vessel or production section. Do NOT extract receiving vessels, reefer vessels, or transport vessels — these appear in the 'Declaration of Transhipment at Sea' section only.\n\nWhere to look by certificate type:\n- USA/NOAA: 'VESSEL NAME/FISHING GROUP' column in Production Description table\n- Norwegian: 'Fishing vessel name' column in catch details table\n- New Zealand MPI: 'Vessel names / Registration' field — name only, not registration number\n- German BLE: 'Vessel name' column in vessel section\n- Indian MPEDA: 'Name of the vessel' column in annexure table\n- Pakistani: 'Name of Vessel' column in Appendix I\n- Russian: '2. Fishing Vessel Name' field — section 2 only\n- Icelandic: 'Vessel Name / Skipsnr.' column\n\nPreserve vessel names exactly as written including vessel type prefixes and suffixes (e.g. F/V, F\\V, M/V, F/T, R/V). Do not strip or add any prefix.\n\nReturn unique vessel names as a list. If only one unique vessel name, return as a single string. If not found, return null."
+    },
+    {
+  "field_id": "receiving_vessel_names",
+  "label": "Receiving Vessel Names",
+  "synonyms": [
+    "Receiving Vessel", "Master of Receiving Vessel",
+    "Vessel Name (receiving)", "Reefer Vessel"
+  ],
+  "question": "What is the name of the receiving or reefer vessel involved in transshipment at sea?\n\nThis vessel collected the catch from the fishing vessel at sea and transported it to port. It appears in the 'Declaration of Transhipment at Sea' section labeled 'Receiving Vessel', 'Master of Receiving Vessel', or 'Vessel Name' in the transshipment section.\n\nDo NOT extract the fishing vessel name here — that is captured separately in vessel_names.\n\nReturn all unique receiving vessel names as a list. If only one vessel name, return as a single string. If no transshipment occurred or no receiving vessel is named, return null."
+},
+    {
+      "field_id": "vessel_registration_numbers",
+      "label": "Vessel Registration Numbers",
+      "synonyms": [
+        "Registration Number", "Vessel Registration No",
+        "License/Registration Detail", "Flag-Home Port and Registration Number",
+        "Vessel Code", "Reg. No", "ADEC#"
+      ],
+      "question": "What are the official registration or license numbers for all fishing vessels on this certificate?\n\nWhere to look by certificate type:\n- USA/NOAA: 'LICENSE/REGISTRATION DETAIL' column in the Production Description table (e.g., 'ADEC#1196 AK 619', '517242', '1267875')\n- Norwegian: 'Registration number' column in the fishing vessel table (e.g., 'M-0085-G', 'T 0005H')\n- New Zealand (MPI): vessel registration numbers in the 'Vessel names / Registration' field\n- German (BLE/EU): 'Reg. no.' sub-column in the product table\n- Indian (MPEDA): 'Regn. No' column in the annexure table (e.g., 'IND-DD-02-MM-2025')\n- Pakistani: 'Registration Number' column in Appendix I (e.g., '18046-B', '21800-B')\n- Russian: 'Flag-Home Port and Registration Number' field (e.g., 'Russia/Kaliningrad, 2165')\n\nReturn all registration numbers as a list. If only one number, return as a single string. If not found, return null."
+    },
+    {
+  "field_id": "vessel_permit_number",
+  "label": "Vessel Permit Number",
+  "synonyms": [
+    "Permit holder signatures/numbers",
+    "Fishing permit number",
+    "Permit No.",
+    "Vessel Permit #"
+  ],
+  "question": "What is the fishing permit number or permit holder number for the vessel(s) on this certificate?\n\nWhere to look:\n- New Zealand MPI: 'Permit holder signatures/numbers' field-  one permit number may cover multiple vessel groups (e.g. '(1-7) 8422125')\n- Norwegian: fishing licence number in the vessel details section\n- Other formats: field labeled 'Permit No.' or 'Fishing Permit'\n\nExtract the permit number only. Preserve the number exactly as written including any prefix symbols. If multiple permit numbers exist for different vessel groups, return each as a separate list item. If not found, return null."
+},
+    {
+      "field_id": "vessel_flag_state",
+      "label": "Vessel Flag State",
+      "synonyms": [
+        "Flag", "Flag State", "Flag-Home Port", "Country of exportation",
+        "Flag State Authority"
+      ],
+      "question": "What is the country where the fishing vessel is registered and authorized to fish? PRIORITY ORDER — use the first match found: 1. Field explicitly labeled 'Flag State', 'Flag - Home Port', or 'Flag-Home Port and Registration Number' — extract the country only, not the port name (e.g. 'Cuxhaven, Germany' → 'Germany') 2. Field labeled 'Country of exportation' when the exporter and vessel are from the same country — confirm by checking that the vessel registration format matches the exportation country 3. Document title or header - USA/NOAA certificates state 'Products Caught by U.S.-Flagged Vessels' → 'USA' 4. Vessel registration number format — use as a signal only when no explicit flag state field exists: Norwegian registrations (e.g. M-0085-G, T 0005H) → Norway; Pakistani registrations (e.g. 18046-B, 21800-B) → Pakistan; Indian registrations (e.g. IND-DD-02-MM-2025) → India; Icelandic vessel codes (e.g. SH, EA, ÞH, BA, SF suffixes) → Iceland. If multiple vessels have different flag states, return each unique item as a separate list item. If not found, return null."
+    },
+    {
+      "field_id": "catch_area",
+      "label": "Catch Area / Fishing Area",
+      "synonyms": [
+        "FAO Catch Area", "Catch area", "Catch Area / Fishing gear",
+        "FAO Zone", "Fishing Area", "Catch Area and dates",
+        "Arabian Sea FAO Zone"
+      ],
+      "question": "What is the fishing or catch area where the product was harvested?\n\nWhere to look by certificate type:\n- USA/NOAA: 'FAO Catch Area' column in the species table (e.g., '67' meaning FAO Area 67)\n- Norwegian: 'Catch area / Fishing gear' column in the fishing vessel table (e.g., 'FAO-27.2.A.2,NO-0419', 'FAO-27.1.B,NO-0318')\n- New Zealand (MPI): 'IMO numbers / Catch areas' field (e.g., 'FAO81 - New Zealand EEZ')\n- German (BLE/EU): 'FAO-area' column in product table (e.g., 'Fi/F 27')\n- Indian (MPEDA): 'FAO Zone' noted at bottom of annexure (e.g., 'FAO Zone 51')\n- Pakistani: 'Catch Area' field (e.g., 'FAO ZONE 51', 'ARABIAN SEA FAO ZONE: 051')\n- Russian: 'Catch area(s) and dates' column (e.g., 'FAO 27/ICES - Ib')\n\nReturn the unique FAO area code or descriptive name as found. If not found, return null."
+    },
+    {
+      "field_id": "fishing_gear",
+      "label": "Fishing Gear",
+      "synonyms": [
+        "Fishing gear", "Type of gear", "Gear type",
+        "Bottom trawl", "Auto longline", "Fishing method"
+      ],
+      "question": "What type of fishing gear was used to catch the product?\n\nWhere to look:\n- Norwegian: fishing gear appears after the FAO area code in the 'Catch area / Fishing gear' column separated by a slash (e.g., 'FAO-27.2.A.2,NO-0419 / Bottom trawl', 'FAO-27.2.A.2,NO-1220 / Auto longline')\n- Other certificate types: may appear in a dedicated 'Fishing gear' or 'Type of gear' field\n\nExtract only the gear type (e.g., 'Bottom trawl', 'Auto longline'). If multiple vessel rows have different gear, return each as a list. If not found, return null."
+    },
+    {
+      "field_id": "vessel_imo_number",
+      "label": "Vessel IMO Number",
+      "synonyms": [
+        "IMO number", "IMO/Lloyd's Number", "IMO numbers"
+      ],
+      "question": "What is the IMO or Lloyd's registration number for the fishing vessel(s)?\n\nIMO numbers are 7-digit international vessel identifiers. Look for them labeled 'IMO/Lloyd's Number', 'IMO numbers', or 'IMO/Lloyds Number (if issued)'.\n\nWhere to look:\n- New Zealand (MPI): 'IMO numbers' field listing one per vessel group (e.g., '8901420', '8714607')\n- Russian: 'IMO/Lloyd's Number (if issued)' field (e.g., '8415574', '9033610')\n- Norwegian: 'IMO/Lloyds Number' if present in vessel detail\n\nReturn all IMO numbers as a list. If not found, return null."
+    },
+    {
+      "field_id": "product_code",
+      "label": "Product / HS Code",
+      "synonyms": [
+        "Product code", "Pakistan H.S code", "H.S. Code",
+        "U.S. Commodity Code", "Product CN Code", "HS Code",
+        "Tariff No.", "Harmonised System Code", "Kóti tolflokks",
+        "Tarriff No."
+      ],
+      "question": "What is the product or tariff code (HS code, CN code, or commodity code) for the fishery product?\n\nWhere to look by certificate type:\n- USA/NOAA: 'U.S. Commodity Code' column in the species table (e.g., '030339', '030471', '030363', '030367')\n- Norwegian: 'Product code' column (e.g., '03036303')\n- New Zealand (MPI): 'Harmonised System Code' field (e.g., '030743')\n- German (BLE/EU): 'Product code (Regulation EWG Nr. 2658/87)' column (e.g., '03047190')\n- Indian (MPEDA): 'Product Code' field in species table (e.g., '03038980')\n- Pakistani: 'Pakistan H.S code of fishery product(s)' field (e.g., '030743', '0307.43')\n- Russian: 'Product code / Код продукта' column (e.g., '0303631000', '0303640000')\n- Icelandic: 'Tariff No. / Kóti tolflokks' column (e.g., '0304.7131', '0304.4422')\n\nIf multiple products have different codes, return each unique code as a separate item in a list. If not found, return null."
+    },
+    {
+      "field_id": "validating_authority",
+      "label": "Validating Authority",
+      "synonyms": [
+        "Validating Authority", "Competent Authority of Flag State",
+        "Name of Validating Authority", "Flag State Authority",
+        "Issued and validated by", "Заверен (орган)"
+      ],
+      "question": "What is the name of the government authority that validated or issued this catch certificate?\n\nWhere to look by certificate type:\n- USA/NOAA: 'Validating Authority' field — always 'National Marine Fisheries Service, Seafood Inspection Program'\n- Norwegian: 'Issued and validated electronically by' field (e.g., 'Norges Råfisklag')\n- New Zealand (MPI): 'Competent Authority' field (e.g., 'Ministry for Primary Industries')\n- German (BLE/EU): 'Validating authority' field (e.g., 'Federal Agency for Agriculture and Food (BLE)')\n- Indian (MPEDA): 'Validating Authority (Name, address, tel., fax)' field (e.g., 'THE MARINE PRODUCTS EXPORT DEVELOPMENT AUTHORITY')\n- Pakistani: '1. Name of Validating Authority' field (e.g., 'MARINE FISHERIES DEPARTMENT, MINISTRY OF MARITIME AFFAIRS, GOVERNMENT OF PAKISTAN')\n- Russian: 'Validating Authority / Заверен (орган)' field (e.g., 'Russian Federal Agency for Fisheries')\n\nExtract the authority name only. If not found, return null."
+    },
+    {
+      "field_id": "exporter_address",
+      "label": "Exporter Address",
+      "synonyms": [
+        "Address", "Exporter Address", "Name and address of Exporter",
+        "Address of Exporter"
+      ],
+      "question": "What is the full address of the exporting company on this catch certificate?\n\nCRITICAL:\n- Extract the address of the EXPORTER only — the same entity identified in exporter_name\n- NEVER extract the processor address, recipient address, or buyer address as the exporter address\n- If no exporter field exists (e.g. NMFS Model forms, private company worksheets), return null — do not substitute the processor or recipient address\n- The exporter address must belong to the same company as exporter_name\n\nWhere to look by certificate type:\n- USA/NOAA: 'Address:' field directly below the exporter name in the Exporter section\n- Norwegian: address alongside '8. Name and address of exporter'\n- New Zealand MPI: address alongside 'Name and address of consignor'\n- German BLE: address alongside 'Exporter / Company' field\n- Indian MPEDA: address in '4. Name, address, tel and fax of Exporter' field\n- Pakistani: address in '8. Name of exporter' section and Appendix\n- Russian: address in '8. Name and address of Exporter' field\n- Icelandic: address below exporter name in section III\n- Argentine SENASA: address alongside 'Exportador / Exporter' field\n- NMFS Model forms: return null\n- Private company worksheets: return null\n\nExtract the address only, not the company name. If not found, return null."
+}
+  ]
+}
