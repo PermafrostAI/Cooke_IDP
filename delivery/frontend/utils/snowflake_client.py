@@ -399,6 +399,17 @@ def get_audit_search_results(
         if date_to:
             df = df[df["DOCUMENT_DATE"] <= str(date_to)]
 
+        # Post-filter: keep only results where at least one meaningful query word
+        # appears in the document description. Ignores short words (3 chars or less)
+        # to avoid matching on words like "for", "the", "and".
+        if effective_query and effective_query != "document":
+            query_words = [w.lower() for w in effective_query.split() if len(w) > 3]
+            if query_words:
+                mask = df["DOCUMENT_DESCRIPTION"].str.lower().apply(
+                    lambda d: any(w in str(d).lower() for w in query_words)
+                )
+                df = df[mask]
+
         if df.empty:
             return pd.DataFrame()
 
