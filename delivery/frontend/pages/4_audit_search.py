@@ -6,7 +6,7 @@ from utils.helpers import to_excel_bytes
 
 st.set_page_config(layout="wide")
 
-CORTEX_SEARCH_AVAILABLE = False  # Set to True once CLIENT-387 is resolved
+CORTEX_SEARCH_AVAILABLE = True  # Set to True once CLIENT-387 is resolved
 
 
 @st.dialog("Document fields", width="large")
@@ -16,7 +16,7 @@ def show_document_fields(doc_id: str):
     if df.empty:
         st.info("No fields found for this document.")
     else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width=True, hide_index=True)
 
 
 def render_audit_search():
@@ -64,8 +64,8 @@ def render_audit_search():
 
     # == Search input ===============================================
     query_text = st.text_input(
-        "Ask a question",
-        placeholder="e.g. all health certificates for Chilean suppliers in Q1 2026",
+        "Describe the document",
+        placeholder="e.g. all health certificates for Chilean suppliers",
         disabled=not CORTEX_SEARCH_AVAILABLE,
     )
 
@@ -196,11 +196,12 @@ def render_audit_search():
                 with c1:
                     st.markdown(
                         f"**{row['FILENAME']}**"
-                        f"<br><span style='font-size:11px;color:#6b6860'>{row['DOC_ID']}</span>",
+                        f"<br><span style='font-size:11px;color:#6b6860'>{row.get('DESCRIPTION', '')}</span>"
+                        f"<br><span style='font-size:10px;color:#9b9890'>{row['DOC_ID']}</span>",
                         unsafe_allow_html=True,
                     )
                 with c2:
-                    st.write(row["DOC_TYPE"])
+                    st.write(row["DOC_TYPE"].replace("_", " ").title() if row["DOC_TYPE"] else "")
                 with c3:
                     st.write(row["SUPPLIER"])
                 with c4:

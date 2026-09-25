@@ -454,3 +454,139 @@ SELECT
 FROM PERMAFROST_POC.PROCESSING.VW_EXTRACTION_OUTPUT
 WHERE DOC_TYPE = 'catch_certificate'
 GROUP BY CHILD_DOC_ID, DOC_ID, ORIGINAL_FILE_NAME;
+
+
+-- Review Queue View
+CREATE OR REPLACE VIEW PERMAFROST_POC.PROCESSING.VW_REVIEW_QUEUE AS
+SELECT
+    rq.QUEUE_ID,
+    rq.CHILD_DOC_ID,
+    rq.DOC_TYPE,
+    REPLACE(rq.DOC_TYPE, '_', ' ')                          AS DOC_TYPE_LABEL,
+    rq.COMPOSITE_SCORE,
+    ARRAY_TO_STRING(
+        ARRAY_AGG(
+            REPLACE(REPLACE(f.value::VARCHAR, '_', ' '), ':', ': ')
+        ),
+        ', '
+    )                                                        AS FLAG_REASONS_DISPLAY,
+    rq.NOTES,
+    rq.STATUS,
+    rq.QUEUED_AT,
+    rq.REVIEWED_AT,
+    di.ORIGINAL_FILENAME
+FROM PERMAFROST_POC.PROCESSING.REVIEW_QUEUE rq
+LEFT JOIN PERMAFROST_POC.PROCESSING.DOCUMENTS_CLASSIFIED dc
+    ON rq.CHILD_DOC_ID = dc.CHILD_DOC_ID
+LEFT JOIN PERMAFROST_POC.INGEST.DOCUMENTS_INGESTED di
+    ON dc.DOC_ID = di.DOC_ID
+LEFT JOIN LATERAL FLATTEN(input => PARSE_JSON(rq.FLAG_REASONS), OUTER => TRUE) f
+GROUP BY
+    rq.QUEUE_ID,
+    rq.CHILD_DOC_ID,
+    rq.DOC_TYPE,
+    rq.COMPOSITE_SCORE,
+    rq.NOTES,
+    rq.STATUS,
+    rq.QUEUED_AT,
+    rq.REVIEWED_AT,
+    di.ORIGINAL_FILENAME;
+
+
+-- Document search view
+create or replace view PERMAFROST_POC.PROCESSING.VW_DOCUMENT_SEARCH_SOURCE(
+    CHILD_DOC_ID,
+    DOC_TYPE,
+    DOCUMENT_DESCRIPTION,
+    ORIGINAL_FILENAME,
+    RECEIVED_AT,
+    UPLOADED_BY,
+    COMPOSITE_SCORE,
+    GATE_RESULT,
+    SUPPLIER,
+    PRODUCT,
+    LOT_NUMBER,
+    COUNTRY,
+    DOCUMENT_DATE,
+    SEARCH_TEXT
+) as
+
+with page_text as (
+    select
+        CHILD_DOC_ID,
+        listagg(
+            coalesce(PAGE_CONTENT_TRANSLATED, PAGE_CONTENT), '\n'
+        ) within group (order by PAGE_INDEX) as FULL_TEXT
+    from PERMAFROST_POC.PROCESSING.DOCUMENTS_PAGES
+    where CHILD_DOC_ID is not null
+    group by CHILD_DOC_ID
+),
+
+extracted_fields as (
+    select
+        CHILD_DOC_ID,
+        MAX(CASE WHEN FIELD_ID = 'supplier_name'       THEN FIELD_VALUE END) as SUPPLIER,
+        MAX(CASE WHEN FIELD_ID = 'product_description' THEN FIELD_VALUE END) as PRODUCT,
+        MAX(CASE WHEN FIELD_ID = 'lot_number'          THEN FIELD_VALUE END) as LOT_NUMBER,
+        MAX(CASE WHEN FIELD_ID = 'country_of_origin'   THEN FIELD_VALUE END) as COUNTRY
+        -- document_date intentionally excluded; parsed from DOCUMENT_DESCRIPTION below
+        -- TODO: replace regex with f.DOCUMENT_DATE once DOCUMENTS_EXTRACTED_FLAT is populated
+    from PERMAFROST_POC.PROCESSING.DOCUMENTS_EXTRACTED_FLAT
+    group by CHILD_DOC_ID
+)
+
+select
+    c.CHILD_DOC_ID,
+    c.DOC_TYPE,
+    c.DOCUMENT_DESCRIPTION,
+    i.ORIGINAL_FILENAME,
+    i.RECEIVED_AT,
+    i.UPLOADED_BY,
+    s.COMPOSITE_SCORE,
+    s.GATE_RESULT,
+    f.SUPPLIER,
+    f.PRODUCT,
+    f.LOT_NUMBER,
+    f.COUNTRY,
+    -- temporary: parse date from DOCUMENT_DESCRIPTION until extraction populates DOCUMENTS_EXTRACTED_FLAT
+    -- matches the trailing YYYY-MM-DD date; cert numbers like 24.0-S-00260-2026 do not match this pattern
+    TRY_TO_DATE(
+        REGEXP_SUBSTR(c.DOCUMENT_DESCRIPTION, '\\d{4}-\\d{2}-\\d{2}$'),
+        'YYYY-MM-DD'
+    )::VARCHAR as DOCUMENT_DATE,
+    coalesce(c.DOCUMENT_DESCRIPTION, '') || '\n\n' ||
+    coalesce(p.FULL_TEXT, '')             as SEARCH_TEXT
+
+from PERMAFROST_POC.PROCESSING.DOCUMENTS_CLASSIFIED c
+join PERMAFROST_POC.INGEST.DOCUMENTS_INGESTED i
+    on i.DOC_ID = c.DOC_ID
+left join page_text p
+    on p.CHILD_DOC_ID = c.CHILD_DOC_ID
+left join extracted_fields f
+    on f.CHILD_DOC_ID = c.CHILD_DOC_ID
+left join PERMAFROST_POC.PROCESSING.DOCUMENTS_SCORED s
+    on s.CHILD_DOC_ID = c.CHILD_DOC_ID;
+
+
+-- CORTEX SEARCH SERVICE
+create or replace cortex search service PERMAFROST_POC.PROCESSING.DOCUMENT_AUDIT_SEARCH
+    on SEARCH_TEXT
+    attributes DOC_TYPE, SUPPLIER, LOT_NUMBER, COUNTRY, DOCUMENT_DATE, GATE_RESULT
+    warehouse = SANDBOX_WH
+    target_lag = '7 days'
+    as select
+        CHILD_DOC_ID,
+        DOC_TYPE,
+        DOCUMENT_DESCRIPTION,
+        ORIGINAL_FILENAME,
+        RECEIVED_AT,
+        UPLOADED_BY,
+        COMPOSITE_SCORE,
+        GATE_RESULT,
+        SUPPLIER,
+        PRODUCT,
+        LOT_NUMBER,
+        COUNTRY,
+        DOCUMENT_DATE,
+        SEARCH_TEXT
+    from PERMAFROST_POC.PROCESSING.VW_DOCUMENT_SEARCH_SOURCE;
