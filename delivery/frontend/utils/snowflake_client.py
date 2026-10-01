@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from snowflake.core import Root
 from utils.constants import (
     settings,
@@ -9,6 +9,9 @@ from utils.constants import (
     STATUS_DUPLICATE,
     STATUS_PIPELINE_UNAVAILABLE,
     PIPELINE_UNAVAILABLE_MSG,
+    EXPORT_ALLOWED_VIEWS,
+    EXPORT_DATE_FILTER_COLUMN,
+    EXPORT_EXCLUDED_COLUMNS,
 )
 
 @st.cache_resource(show_spinner=False)
@@ -547,50 +550,97 @@ def get_audit_document_fields(doc_id: str) -> pd.DataFrame:
     
 
 
+# == EXPORT ============================================================================
+def _require_export_view(view_name: str) -> None:
+    """
+    Raises RuntimeError unless view_name is one of the export views in
+    EXPORT_VIEW_BY_DOC_TYPE. View names are never built from dropdown text.
+    """
+    if view_name not in EXPORT_ALLOWED_VIEWS:
+        raise RuntimeError("The requested export view is not allowed.")
+
+
+@st.cache_data(ttl=30)
 def get_extraction_output(
-    doc_type: str,
-    date_from,
-    date_to,
-    include_status: str,
-    include_confidence: bool,
+    view_name: str,
+    date_from: date,
+    date_to: date,
+    include_undated: bool = False,
 ) -> pd.DataFrame:
     """
-    Placeholder data for the export screen.
-    Replace with a real Snowflake query once EXTRACTION_OUTPUT schema is confirmed.
+    Returns one row per approved document from a single export view,
+    limited to documents whose parsed document date falls between
+    date_from and date_to, both included.
+
+    When include_undated is True, documents with no readable document
+    date are returned as well, after the dated documents. Their
+    DOCUMENT_DATE is blank and RECEIVED_DATE still shows when the file
+    arrived. When it is False, those documents never match the range,
+    so they are left out. Use get_export_unreadable_date_count to tell
+    the user how many there are.
+
+    view_name must be a value from EXPORT_VIEW_BY_DOC_TYPE. Any other
+    name raises RuntimeError. The helper date column and the internal
+    ID columns are filtered or sorted on in SQL and left out of the
+    result.
+
+    Raises RuntimeError on failure. Page files catch it and call st.error().
     """
-    data = {
-        "DOC_ID": ["doc_b7d200", "doc_5f31cc", "doc_2b90fa", "doc_ac31d0"],
-        "DOC_TYPE": ["Packing List", "Packing List", "Packing List", "Packing List"],
-        "SUPPLIER": ["Mariscos del Sur", "Mariscos del Sur", "Baltic Foods", "Ocean Harvest"],
-        "INVOICE_NO": ["MDS-2026-0091", "MDS-2026-0088", "BF-77120", "OH-5521"],
-        "LOT_NO": ["L-4471", "L-4468", "L-9932", "L-1180"],
-        "PRODUCT": [
-            "Frozen Atlantic Salmon Fillet",
-            "Frozen Cod Loin",
-            "Smoked Herring",
-            "Frozen Shrimp",
-        ],
-        "NET_WEIGHT": ["1,240 kg", "980 kg", "410 kg", "720 kg"],
-        "CARTONS": [62, 49, 28, 36],
-        "OVERALL_CONFIDENCE": [0.78, 0.95, 0.93, 0.90],
-        "STATUS": ["APPROVED", "AUTO_APPROVED", "AUTO_APPROVED", "AUTO_APPROVED"],
-        "EXTRACTED_AT": ["2026-07-14", "2026-07-12", "2026-07-10", "2026-07-09"],
-    }
+    _require_export_view(view_name)
 
-    confidence_cols = {
-        "SUPPLIER_CONFIDENCE": [0.96, 0.97, 0.95, 0.93],
-        "PRODUCT_CONFIDENCE": [0.74, 0.95, 0.92, 0.91],
-        "NET_WEIGHT_CONFIDENCE": [0.61, 0.94, 0.93, 0.90],
-        "LOT_NO_CONFIDENCE": [0.58, 0.96, 0.94, 0.89],
-    }
+    if date_from > date_to:
+        raise RuntimeError("Date from must be on or before date to.")
 
-    df = pd.DataFrame(data)
+    # isoformat() on a date only produces digits and hyphens, so the
+    # values are safe to place inside the SQL text.
+    date_from_text = date_from.isoformat()
+    date_to_text = date_to.isoformat()
 
-    if include_confidence:
-        for col, values in confidence_cols.items():
-            df[col] = values
+    # Both lists come from constants.py, never from user input.
+    excluded_columns = ", ".join(
+        (EXPORT_DATE_FILTER_COLUMN, *EXPORT_EXCLUDED_COLUMNS)
+    )
 
-    return df.copy(deep=True)
+    # include_undated is a Python bool and never user text, so the extra
+    # clause below is safe to add to the SQL.
+    undated_clause = (
+        f"OR {EXPORT_DATE_FILTER_COLUMN} IS NULL"
+        if include_undated is True
+        else ""
+    )
+
+    return _safe_query(f"""
+        SELECT * EXCLUDE ({excluded_columns})
+        FROM {view_name}
+        WHERE (
+            {EXPORT_DATE_FILTER_COLUMN}
+                BETWEEN TO_DATE('{date_from_text}', 'YYYY-MM-DD')
+                    AND TO_DATE('{date_to_text}', 'YYYY-MM-DD')
+            {undated_clause}
+        )
+        ORDER BY {EXPORT_DATE_FILTER_COLUMN} DESC NULLS LAST,
+                 ORIGINAL_FILE_NAME ASC
+    """)
+
+
+@st.cache_data(ttl=30)
+def get_export_unreadable_date_count(view_name: str) -> int:
+    """
+    Returns how many documents in an export view have no readable
+    document date. These documents drop out of any date filtered result.
+    The count covers documents with no date text and documents whose
+    date text is not in YYYY-MM-DD format.
+
+    Raises RuntimeError on failure.
+    """
+    _require_export_view(view_name)
+
+    df = _safe_query(f"""
+        SELECT COUNT(*) AS UNREADABLE_COUNT
+        FROM {view_name}
+        WHERE {EXPORT_DATE_FILTER_COLUMN} IS NULL
+    """)
+    return int(df["UNREADABLE_COUNT"].iloc[0])
 
 
 
