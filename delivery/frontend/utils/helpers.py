@@ -1,11 +1,12 @@
 import io
+import re
 import pandas as pd
 import math
 import markdown as md
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
-from utils.constants import settings
+from utils.constants import settings, EXCEL_SHEET_NAME_MAX_LENGTH
 
 
 def confidence_label(score) -> str:
@@ -108,6 +109,96 @@ def to_excel_bytes(df: pd.DataFrame) -> bytes:
             for cell in col
         )
         ws.column_dimensions[col[0].column_letter].width = min(max_length + 4, 60)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer.read
+
+# Characters that Excel does not allow in a sheet name.
+_INVALID_SHEET_NAME_CHARS = re.compile(r"[\\/*?:\[\]]")
+
+
+def _safe_sheet_name(name: str, used_names: set[str]) -> str:
+    """
+    Returns a sheet name that Excel accepts.
+    Removes characters Excel forbids, cuts the name to
+    EXCEL_SHEET_NAME_MAX_LENGTH characters, and adds a number at the end
+    if the same name was already used. Excel compares names without
+    regard to case, so used_names holds lower case names.
+    """
+    cleaned = _INVALID_SHEET_NAME_CHARS.sub(" ", name).strip().strip("'")
+    cleaned = cleaned[:EXCEL_SHEET_NAME_MAX_LENGTH].strip() or "Sheet"
+
+    candidate = cleaned
+    counter = 2
+    while candidate.lower() in used_names:
+        suffix = f" {counter}"
+        candidate = cleaned[: EXCEL_SHEET_NAME_MAX_LENGTH - len(suffix)] + suffix
+        counter += 1
+
+    used_names.add(candidate.lower())
+    return candidate
+
+
+def _write_df_to_sheet(ws, df: pd.DataFrame) -> None:
+    """
+    Writes a dataframe to an existing worksheet.
+    Column headers are bold on a grey fill. Column widths fit the content
+    up to a maximum of 60. Dict-typed columns are dropped before writing
+    to avoid openpyxl errors. Missing values become empty cells.
+    A dataframe with no rows still gets its header row.
+    """
+    df = df[[
+        col for col in df.columns
+        if not df[col].apply(lambda x: isinstance(x, dict)).any()
+    ]]
+    df = df.astype(object).where(df.notna(), None)
+
+    header_font = Font(bold=True)
+    header_fill = PatternFill(
+        start_color="E4E4E4", end_color="E4E4E4", fill_type="solid"
+    )
+
+    for row_idx, row in enumerate(
+        dataframe_to_rows(df, index=False, header=True), start=1
+    ):
+        ws.append(row)
+        if row_idx == 1:
+            for cell in ws[row_idx]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+
+    for col in ws.columns:
+        max_length = max(
+            len(str(cell.value)) if cell.value is not None else 0
+            for cell in col
+        )
+        ws.column_dimensions[col[0].column_letter].width = min(max_length + 4, 60)
+
+
+def to_excel_workbook_bytes(sheets: dict[str, pd.DataFrame]) -> bytes:
+    """
+    Converts several dataframes to one in-memory .xlsx file and returns
+    the raw bytes. Each key in sheets becomes one sheet name and each
+    value becomes the content of that sheet, in the order given.
+
+    Sheet names are made safe for Excel: forbidden characters are removed,
+    names are cut to 31 characters, and repeated names get a number.
+    Raises ValueError if sheets is empty, because a workbook needs at
+    least one sheet.
+    """
+    if not sheets:
+        raise ValueError("At least one sheet is required to build a workbook.")
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)  # remove the empty default sheet
+
+    used_names: set[str] = set()
+    for requested_name, df in sheets.items():
+        ws = wb.create_sheet(title=_safe_sheet_name(requested_name, used_names))
+        _write_df_to_sheet(ws, df)
 
     buffer = io.BytesIO()
     wb.save(buffer)
